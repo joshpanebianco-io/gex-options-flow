@@ -500,10 +500,10 @@ const INFO = {
         document.execCommand("copy"); done(); }
     });
   }
-  $("#readoutCav").textContent =
-    (!MULT ? "Futures quote unavailable this run — every value on the page is QQQ-space. " : "") +
-    "Naive model — textbook dealer positioning, the same assumption every free source runs on; not dealer-calibrated. " +
-    "Levels are zones (±~20 NQ pts), never ticks. Context beneath order flow, not trade signals.";
+  const cav = $("#readoutCav");
+  const cavTxt = !MULT ? "Futures quote unavailable this run — every value on the page is QQQ-space." : "";
+  cav.textContent = cavTxt;
+  cav.hidden = !cavTxt;
 })();
 
 /* ---------------- chart 1: strike histogram ---------------- */
@@ -956,14 +956,14 @@ function paginate(host, cols, rows, hlFn, pageSize){
     const d = new Date(e+"T12:00:00");
     return d.toLocaleDateString('en-US',{month:'short',day:'2-digit'})+" "+fmtB(v); }).join(" · ");
   const parts = [
-    "<b>naive</b> means exactly that: every number here assumes dealers are long calls / short puts (textbook), NOT dealer-calibrated positioning — this is not SpotGamma/MenthorQ.",
-    "Translated levels are <b>zones, not ticks</b> (1 QQQ strike ≈ 41–42 NQ pts → ±~20 NQ pts).",
-    "This map is <b>context beneath order flow, not trade signals</b>.",
+    "GEXYGEN maps dealer gamma from published open interest using the industry-standard convention (dealers long calls, short puts).",
+    "Translated levels are <b>zones, not ticks</b> — one QQQ strike spans ≈41–42 NQ pts, so read each level as ±~20 pts.",
+    "The map is <b>context beneath order flow, not trade signals</b>.",
     `Per-expiry net γ: ${subs || "—"}.`,
-    `Naive DEX ${fmtB(SNAP.dex)} (natural-sign Δ notional) — positioning tilt only.`,
-    `Sources: Cboe delayed chains (~15 min) · CNBC futures quote — unofficial-but-stable endpoints; failures are surfaced above, never silent.`,
-    `OI refreshes overnight (OCC settlement); intraday snapshots re-price IV/spot on frozen OI.`,
-    "Personal use only — redistributing market data commercially requires exchange licenses.",
+    `DEX ${fmtB(SNAP.dex)} (natural-sign Δ notional) — positioning tilt only.`,
+    `Sources: Cboe delayed chains (~15 min) · CNBC futures quote; any fetch issue is surfaced in the status chips, never silently.`,
+    `Open interest refreshes overnight via OCC settlement; intraday snapshots re-price IV and spot on the day's OI.`,
+    "Personal use — market data is licensed for individual use and not for commercial redistribution.",
   ];
   f.innerHTML = parts.join(" ");
 })();
