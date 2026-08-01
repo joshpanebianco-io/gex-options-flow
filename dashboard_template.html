@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="120">
+<title>GEXYGEN — gamma map</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%230a0b10"/><circle cx="12.5" cy="19.5" r="7" fill="none" stroke="%2300ffb2" stroke-width="2.8"/><circle cx="22.5" cy="10.5" r="4.8" fill="none" stroke="%23ff4fa3" stroke-width="2.8"/></svg>'>
+<style>
+:root{
+  --bg:#0a0b10; --surface:#11131a; --surface-2:#171a24; --surface-3:#1d2130;
+  --ink:#f2f4f8; --ink-2:#a8adbb; --ink-3:#6b7080;
+  --grid:#232733; --baseline:#3a3f4d; --ring:rgba(255,255,255,.08);
+  --green:#00ac77; --pink:#bc2071; --gold:#9c6d00;
+  --neon-green:#00ffb2; --neon-pink:#ff4fa3; --neon-gold:#ffc933;
+  --neutral-line:#dfe3ec; --bad:#e05252; --warnc:#d9a13b;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:
+    radial-gradient(1100px 500px at 15% -10%, rgba(0,255,178,.045), transparent 60%),
+    radial-gradient(1100px 500px at 85% -10%, rgba(255,79,163,.045), transparent 60%),
+    var(--bg);
+  color:var(--ink); min-height:100vh; padding:18px clamp(12px,2.5vw,28px) 40px;
+}
+.wrap{max-width:1400px;margin:0 auto}
+
+/* ---------- header ---------- */
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:6px 2px 16px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand .mark{align-self:center;flex:none;
+  filter:drop-shadow(0 0 6px rgba(0,255,178,.45)) drop-shadow(0 0 6px rgba(255,79,163,.3))}
+.logo{font-size:26px;font-weight:800;letter-spacing:.06em;
+  background:linear-gradient(90deg,var(--neon-green),var(--neon-pink));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 10px rgba(0,255,178,.25));}
+.sub{color:var(--ink-3);font-size:12.5px;letter-spacing:.02em}
+.badge{display:inline-flex;align-items:center;gap:7px;padding:0 12px;border-radius:999px;
+  font-size:12.5px;font-weight:700;letter-spacing:.08em;border:1px solid var(--ring);
+  height:29px;line-height:1}  /* pinned: symbol-glyph font swaps must not reflow the header */
+.badge.neg{background:rgba(188,32,113,.14);border-color:rgba(255,79,163,.45);
+  box-shadow:0 0 14px rgba(255,79,163,.18)}
+.badge.pos{background:rgba(0,172,119,.14);border-color:rgba(0,255,178,.45);
+  box-shadow:0 0 14px rgba(0,255,178,.18)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-left:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:999px;
+  background:var(--surface);border:1px solid var(--ring);font-size:11.5px;color:var(--ink-2);
+  height:25px;line-height:1}  /* pinned, same reason as .badge */
+.chip[data-pop-title]{cursor:help}
+.chip[data-pop-title]:hover,.chip[data-pop-title]:focus-visible{border-color:var(--ink-3);outline:none}
+.chip .ic{font-size:11px;color:var(--ink-3)}
+.chip.warn{border-color:rgba(217,161,59,.5);color:var(--warnc)}
+.chip.warn .ic{color:var(--warnc)}
+.chip.bad{border-color:rgba(224,82,82,.55);color:var(--bad)}
+.chip.bad .ic{color:var(--bad)}
+
+/* ---------- KPI tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin-bottom:14px}
+.tile{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:12px 14px 11px}
+.tile .lbl{font-size:11px;color:var(--ink-3);letter-spacing:.05em;text-transform:uppercase;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;min-height:16px}
+.tile .val{font-size:24px;font-weight:650;margin-top:4px;line-height:1.15}
+.tile .val.small{font-size:20px}
+.tile .aux{font-size:11.5px;color:var(--ink-3);margin-top:3px}
+.tile.hero .val{font-size:34px;font-weight:700}
+.tile.hero{border-color:rgba(255,255,255,.14)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.dot.g{background:var(--green);box-shadow:0 0 7px rgba(0,255,178,.6)}
+.dot.p{background:var(--pink);box-shadow:0 0 7px rgba(255,79,163,.6)}
+.dot.f{background:var(--gold);box-shadow:0 0 7px rgba(255,201,51,.55)}
+.dot.n{background:var(--neutral-line)}
+
+/* ---------- cards / grid ---------- */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:14px;
+  padding:14px 16px 12px;position:relative;min-width:0}
+.card.full{grid-column:1/-1}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+.card h2{font-size:13.5px;font-weight:650;letter-spacing:.02em}
+.card .hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:8px}
+.card .hd .note{font-size:11px;color:var(--ink-3)}
+.legend{display:flex;gap:14px;margin-left:auto;font-size:11.5px;color:var(--ink-2);flex-wrap:wrap}
+.legend .key{display:inline-flex;align-items:center;gap:6px}
+.key .swr{width:10px;height:10px;border-radius:2.5px;flex:none}
+.key .swl{width:14px;height:0;border-top:2.5px solid;border-radius:2px;flex:none}
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:auto}
+svg text{font-family:inherit}
+.tt{position:absolute;pointer-events:none;background:var(--surface-2);border:1px solid var(--ring);
+  border-radius:9px;padding:8px 11px;font-size:12px;box-shadow:0 6px 22px rgba(0,0,0,.5);
+  z-index:5;display:none;min-width:130px}
+.tt .t-title{font-weight:650;font-size:12.5px;margin-bottom:5px}
+.tt .row{display:flex;align-items:center;gap:7px;margin-top:3px;color:var(--ink-2)}
+.tt .row b{color:var(--ink);font-weight:650;margin-left:auto;font-variant-numeric:tabular-nums}
+.tt .k{width:11px;height:0;border-top:2.5px solid;border-radius:2px;flex:none}
+
+/* ---------- tables ---------- */
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{color:var(--ink-3);font-weight:600;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+  text-align:right;padding:6px 10px;border-bottom:1px solid var(--grid)}
+td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--grid);
+  font-variant-numeric:tabular-nums;color:var(--ink-2)}
+th:first-child,td:first-child{text-align:left}
+tr.hl td{background:var(--surface-2);color:var(--ink)}
+td .tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-2);
+  min-width:92px}  /* equal-width tags → wall dots share one left edge */
+details{margin-top:12px;background:var(--surface);border:1px solid var(--ring);border-radius:12px}
+details summary{cursor:pointer;padding:11px 16px;font-size:12.5px;color:var(--ink-2);
+  list-style:none;display:flex;align-items:center;gap:8px}
+details summary::before{content:"▸";color:var(--ink-3);transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+details .inner{padding:0 16px 14px;overflow-x:auto}
+.pgnav{display:flex;gap:10px;align-items:center;padding:10px 2px 2px;font-size:11.5px;color:var(--ink-3)}
+.pgbtn{background:var(--surface-2);border:1px solid var(--ring);color:var(--ink-2);
+  border-radius:7px;padding:4px 11px;cursor:pointer;font:inherit;font-size:11.5px}
+.pgbtn:disabled{opacity:.35;cursor:default}
+.pgbtn:hover:not(:disabled),.pgbtn:focus-visible{border-color:var(--ink-3);outline:none}
+
+/* ---------- info popovers ---------- */
+.info{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;
+  border-radius:50%;border:1px solid var(--ring);background:var(--surface-2);color:var(--ink-3);
+  font-size:9.5px;font-weight:650;cursor:help;padding:0;line-height:1;flex:none;
+  font-family:inherit;margin-left:2px}
+.info:hover,.info:focus-visible{color:var(--ink);border-color:var(--ink-3);outline:none}
+.pop{position:fixed;z-index:50;max-width:290px;background:var(--surface-3);border:1px solid var(--ring);
+  border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.55;color:var(--ink-2);
+  box-shadow:0 10px 30px rgba(0,0,0,.6);display:none}
+.pop b{color:var(--ink);display:block;margin-bottom:3px}
+
+/* ---------- session read ---------- */
+.readout{margin-bottom:12px}
+.readout p{font-size:13px;line-height:1.7;color:var(--ink-2)}
+.readout p b{color:var(--ink);font-weight:650}
+.tvrow{display:flex;align-items:center;gap:10px;margin-top:10px;min-width:0}
+.tvrow .tvlab{font-size:11px;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;flex:none}
+.tvrow code{font-family:Consolas,ui-monospace,monospace;font-size:11px;color:var(--ink-2);
+  background:var(--surface-2);border:1px solid var(--ring);border-radius:7px;
+  padding:5px 9px;overflow-x:auto;white-space:nowrap;flex:1 1 auto;min-width:0}
+.tvrow button{background:var(--surface-2);border:1px solid var(--ring);color:var(--ink-2);
+  border-radius:7px;padding:5px 12px;cursor:pointer;font:inherit;font-size:11.5px;flex:none}
+.tvrow button:hover{border-color:var(--ink-3)}
+.readout .cav{margin-top:9px;font-size:11px;color:var(--ink-3);border-top:1px solid var(--grid);
+  padding-top:8px}
+
+/* ---------- footer ---------- */
+footer{margin-top:20px;padding:16px 18px;background:var(--surface);border:1px solid var(--ring);
+  border-radius:12px;font-size:11.5px;color:var(--ink-3);line-height:1.65}
+footer b{color:var(--ink-2);font-weight:650}
+.empty{color:var(--ink-3);font-size:12px;padding:26px 8px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 32 32" width="25" height="25" aria-hidden="true">
+        <circle cx="12.5" cy="19.5" r="7" fill="none" stroke="var(--neon-green)" stroke-width="2.8"/>
+        <circle cx="22.5" cy="10.5" r="4.8" fill="none" stroke="var(--neon-pink)" stroke-width="2.8"/>
+      </svg>
+      <div class="logo">GEXYGEN</div>
+      <div class="sub">naive gamma map · NQ / MNQ · zones not ticks</div>
+    </div>
+    <div id="badge" class="badge"></div>
+    <div id="chips" class="chips"></div>
+  </header>
+
+  <div id="tiles" class="tiles"></div>
+
+  <div class="card readout">
+    <div class="hd"><h2>Session Read</h2>
+      <span class="note">auto-generated from the figures — context beneath order flow, never signals</span></div>
+    <p id="readout"></p>
+    <div class="tvrow" id="tvRow" hidden>
+      <span class="tvlab">TradingView string</span>
+      <code id="tvStr"></code>
+      <button id="tvCopy" type="button">Copy</button>
+    </div>
+    <p class="cav" id="readoutCav"></p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="hd">
+        <h2>γ by Strike</h2><button class="info" data-info="hist" aria-label="explain this chart">i</button>
+        <span class="note" id="histNote">$B per 1%</span>
+        <div class="legend">
+          <span class="key"><span class="swr" style="background:var(--green)"></span>Call γ</span>
+          <span class="key"><span class="swr" style="background:var(--pink)"></span>Put γ</span>
+        </div>
+      </div>
+      <div class="chart" id="hist"></div>
+    </div>
+
+    <div class="card">
+      <div class="hd">
+        <h2>Net GEX vs Price</h2><button class="info" data-info="curve" aria-label="explain this chart">i</button>
+        <span class="note">naive flip = zero crossing · BS re-priced grid</span>
+      </div>
+      <div class="chart" id="curve"></div>
+      <div class="hd" style="margin:14px 0 8px"><h2>γ-Ladder</h2>
+        <span class="note">top strikes by |net| within ±5% · walls always listed</span></div>
+      <div id="ladder" style="overflow-x:auto"></div>
+    </div>
+
+    <div class="card full">
+      <div class="hd">
+        <h2>Session Drift</h2><button class="info" data-info="drift" aria-label="explain this chart">i</button>
+        <span class="note" id="driftNote">levels &amp; net γ across today’s snapshots (ET)</span>
+        <div class="legend" id="driftLegend"></div>
+      </div>
+      <div class="chart" id="drift"></div>
+    </div>
+  </div>
+
+  <details><summary>All Strikes — Table View</summary><div class="inner" id="strikesTable"></div></details>
+  <details><summary>Session Snapshots — Table View</summary><div class="inner" id="snapsTable"></div></details>
+
+  <footer id="foot"></footer>
+</div>
+
+<noscript><p style="color:#a8adbb;padding:20px">This dashboard needs JavaScript to render.</p></noscript>
+
+<script>
+"use strict";
+const DATA = __NQGEX_PAYLOAD__;
+
+/* ---------------- helpers ---------------- */
+const $ = s => document.querySelector(s);
+const SNAP = DATA.snap, HIST = DATA.history || [], STATUS = DATA.status || {};
+const MULT = SNAP.mult;                      // null → QQQ-space fallback
+const SPACE = MULT ? SNAP.fx : SNAP.sym;     // label for the price space in use
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const C = {green:css('--green'), pink:css('--pink'), gold:css('--gold'),
+           neutral:css('--neutral-line'), ink2:css('--ink-2'), ink3:css('--ink-3'),
+           grid:css('--grid'), base:css('--baseline')};
+const toPx  = v => MULT ? v*MULT : v;                  // chain price → display space
+const fmtNQ = v => v==null ? "—" : Math.round(v).toLocaleString('en-US');
+const fmtPxV= v => v==null ? "—" : (MULT ? fmtNQ(v*MULT) : (+v.toFixed(1)).toLocaleString('en-US'));
+const fmtK  = k => k==null ? "—" : (+k.toFixed(2)).toString();
+const fmtB  = v => { if (v==null) return "—"; const b = v/1e9;
+  return Math.abs(b) < 0.005 ? "0.00B" : (b>=0?"+":"") + b.toFixed(2) + "B"; };
+const fmtExp= iso => iso ? new Date(iso+"T12:00:00").toLocaleDateString('en-US',{month:'short',day:'2-digit'}) : "—";
+const etHM  = iso => { const m = /T(\d\d):(\d\d)/.exec(iso||""); return m ? m[1]+":"+m[2] : "—"; };
+function svg(tag, attrs, parent){
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+function txt(parent, x, y, s, fill, size, anchor, weight){
+  const t = svg("text", {x, y, fill: fill||C.ink2, "font-size": size||11,
+    "text-anchor": anchor||"start", "font-weight": weight||400}, parent);
+  t.textContent = s; return t;
+}
+function tooltip(host){
+  const el = document.createElement("div"); el.className = "tt"; host.appendChild(el);
+  return {
+    el,
+    show(x, y){ el.style.display = "block";
+      const r = host.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+      let L = x + 14; if (L + w > r.width - 4) L = x - w - 14;
+      let T = y - h/2; T = Math.max(4, Math.min(T, r.height - h - 4));
+      el.style.left = L+"px"; el.style.top = T+"px"; },
+    hide(){ el.style.display = "none"; },
+    set(title, rows){ el.replaceChildren();
+      const t = document.createElement("div"); t.className = "t-title"; t.textContent = title; el.appendChild(t);
+      for (const [key, val, color] of rows){
+        const r = document.createElement("div"); r.className = "row";
+        if (color){ const k = document.createElement("span"); k.className = "k";
+          k.style.borderTopColor = color; r.appendChild(k); }
+        const lab = document.createElement("span"); lab.textContent = key; r.appendChild(lab);
+        const b = document.createElement("b"); b.textContent = val; r.appendChild(b);
+        el.appendChild(r); } }
+  };
+}
+/* bar with rounded outer end, square at the baseline. dir=+1 right, -1 left */
+function barPath(x0, y, len, h, dir){
+  const r = Math.min(4, h/2, Math.abs(len));
+  if (len <= 0.4) return null;
+  const x1 = x0 + dir*len;
+  return dir > 0
+    ? `M${x0},${y} H${x1-r} Q${x1},${y} ${x1},${y+r} V${y+h-r} Q${x1},${y+h} ${x1-r},${y+h} H${x0} Z`
+    : `M${x0},${y} H${x1+r} Q${x1},${y} ${x1},${y+r} V${y+h-r} Q${x1},${y+h} ${x1+r},${y+h} H${x0} Z`;
+}
+const niceStep = span => { const raw = span/5, p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1,2,2.5,5,10]) if (raw <= m*p) return m*p; return 10*p; };
+
+/* ---------------- header: badge + chips ---------------- */
+(function header(){
+  const b = $("#badge"), neg = SNAP.regime === "NEG";
+  b.classList.add(neg ? "neg" : "pos");
+  b.textContent = (neg ? "▼ NEG" : "▲ POS") + " GAMMA · " + fmtB(SNAP.net_gex) + "/1%";
+  const bi = document.createElement("button"); bi.className = "info";
+  bi.dataset.info = "badge"; bi.setAttribute("aria-label", "explain the gamma regime");
+  bi.textContent = "i"; b.appendChild(bi);
+  const chips = $("#chips");
+  const chip = (cls, ic, label, explain) => { const c = document.createElement("span");
+    c.className = "chip" + (cls?" "+cls:"");
+    if (explain){ c.dataset.popTitle = label; c.dataset.popBody = explain; c.tabIndex = 0; }
+    const i = document.createElement("span"); i.className = "ic"; i.textContent = ic;
+    c.appendChild(i); c.appendChild(document.createTextNode(label)); chips.appendChild(c); };
+  const ch = STATUS.chain || {};
+  if (ch.source === "fresh")
+    chip("", "✓", "chain fresh",
+         "Options chain downloaded from Cboe this run (source data is ~15-min delayed).");
+  else if (ch.source === "cache")
+    chip("", "✓", `chain cache ${Math.round(ch.age_min)}m`,
+         `Options chain reused from local cache (downloaded ${Math.round(ch.age_min)} min ago). ` +
+         "Cache TTL is 45 min one-shot / 10 min looping so Cboe isn't hammered; the source is ~15-min delayed anyway.");
+  else if (ch.source === "stale_cache") chip("warn", "⚠", `chain STALE ${Math.round(ch.age_min)}m`, ch.error||"");
+  else                             chip("bad", "✕", "chain FAIL", ch.error||"");
+  const q = STATUS.quote || {};
+  if (q.ok) chip("", "✓", `${SNAP.fx} quote live ×${MULT ? MULT.toFixed(3) : "—"}`,
+         "CNBC @ND.1 futures quote succeeded. ×" + (MULT ? MULT.toFixed(3) : "—") +
+         " is the live-derived QQQ→NQ multiplier translating every level — re-derived each run because it drifts with futures basis; never hardcoded.");
+  else      chip("bad", "✕", `quote FAIL — ${SNAP.sym}-space`, q.error||"");
+  chip("", "◷", "OI: last OCC settlement",
+       "OI updates overnight; intraday runs re-price IV/greeks/spot on frozen OI — blind to today’s new 0DTE positioning.");
+  if (SNAP.warn) chip("warn", "⚠", "BS/chain sign disagree", "BS-at-spot sign differs from chain-greek net — treat regime with suspicion.");
+  const age = document.createElement("span"); age.className = "chip"; age.tabIndex = 0;
+  age.dataset.popTitle = "Snapshot age";
+  age.dataset.popBody = "When this snapshot was computed, and how old it is. Turns amber past " +
+              "20 min — the collector isn't feeding (stopped, crashed, or between sessions).";
+  chips.appendChild(age);
+  const gen = new Date(DATA.meta.generated_utc);
+  const tick = () => { const m = Math.max(0, Math.round((Date.now()-gen.getTime())/60000));
+    age.textContent = `updated ${fmtExp(DATA.meta.generated_et.slice(0,10))} · ${etHM(DATA.meta.generated_et)} ET · ${m}m ago`;
+    age.classList.toggle("warn", m > 20);
+    if (m > 20 && !age.dataset.s){ age.dataset.s = "1";
+      age.insertBefore(document.createTextNode("⚠ "), age.firstChild); } };
+  tick(); setInterval(tick, 30000);
+})();
+
+/* ---------------- KPI tiles (crucial set only) ---------------- */
+const gRatio = (()=>{ const c = SNAP.strikes.reduce((a,r)=>a+r.call,0),
+  p = SNAP.strikes.reduce((a,r)=>a+r.put,0); return p > 0 ? c/p : null; })();
+const away = k => { if (k==null) return "";
+  const d = MULT ? Math.round(k*MULT - SNAP.fut) : +(k - SNAP.spot).toFixed(1);
+  const mag = MULT ? Math.abs(d).toLocaleString('en-US')+" pts" : Math.abs(d).toFixed(1);
+  return d >= 0 ? mag+" above" : mag+" below"; };
+
+(function tiles(){
+  const host = $("#tiles");
+  const tile = (label, dotCls, value, aux, opts={}) => {
+    const d = document.createElement("div"); d.className = "tile" + (opts.hero?" hero":"");
+    const l = document.createElement("div"); l.className = "lbl";
+    if (dotCls){ const s = document.createElement("span"); s.className = "dot "+dotCls; l.appendChild(s); }
+    l.appendChild(document.createTextNode(label));
+    if (opts.info){ const b = document.createElement("button"); b.className = "info";
+      b.dataset.info = opts.info; b.setAttribute("aria-label", "explain "+label);
+      b.textContent = "i"; l.appendChild(b); }
+    const v = document.createElement("div"); v.className = "val" + (opts.small?" small":"");
+    v.textContent = value;
+    d.appendChild(l); d.appendChild(v);
+    if (aux){ const a = document.createElement("div"); a.className = "aux"; a.textContent = aux; d.appendChild(a); }
+    host.appendChild(d); };
+
+  const spotD = SNAP.spot, f = SNAP.flip;
+  tile(MULT ? "spot · "+SNAP.fx : "spot · "+SNAP.sym, "n",
+       MULT ? fmtNQ(SNAP.fut) : fmtK(spotD),
+       MULT ? `${SNAP.sym} ${fmtK(spotD)} · ×${MULT.toFixed(3)} live` : "futures quote unavailable",
+       {hero:true, info:"spot"});
+  tile("gamma flip", "f", f==null ? "none ±7%" : fmtPxV(f),
+       f==null ? "no zero crossing in ±7%" : away(f)+" · QQQ "+f.toFixed(1), {info:"flip"});
+  tile("call wall", "g", fmtPxV(SNAP.call_wall),
+       away(SNAP.call_wall)+" · strike "+fmtK(SNAP.call_wall), {info:"cw"});
+  tile("put wall", "p", fmtPxV(SNAP.put_wall),
+       away(SNAP.put_wall)+" · strike "+fmtK(SNAP.put_wall), {info:"pw"});
+  tile("net GEX / 1%", SNAP.regime==="NEG"?"p":"g", fmtB(SNAP.net_gex),
+       SNAP.regime==="NEG" ? "NEG — hedging tends to amplify moves"
+                           : "POS — hedging tends to dampen moves", {small:true, info:"regime"});
+  if (SNAP.em != null){
+    const lo = MULT ? fmtNQ(SNAP.fut-SNAP.em*MULT) : fmtK(spotD-SNAP.em);
+    const hi = MULT ? fmtNQ(SNAP.fut+SNAP.em*MULT) : fmtK(spotD+SNAP.em);
+    tile("expected move", null, MULT ? "±"+fmtNQ(SNAP.em*MULT)+" pts" : "±"+SNAP.em.toFixed(1),
+         lo+" – "+hi+" · ±"+(SNAP.em/spotD*100).toFixed(1)+"%", {small:true, info:"em"});
+  } else tile("expected move", null, "n/a", "front-expiry IV unavailable", {small:true, info:"em"});
+  tile("ATM IV · front", null, SNAP.atm_iv==null ? "—" : (SNAP.atm_iv*100).toFixed(1)+"%",
+       "expiry "+fmtExp(SNAP.front_exp) +
+       (SNAP.iv30!=null ? " · IV30 ≈ "+(SNAP.iv30*100).toFixed(1)+"%" : ""),
+       {small:true, info:"iv"});
+  tile("positioning", null, SNAP.pc_oi==null ? "—" : SNAP.pc_oi.toFixed(2)+" P/C",
+       gRatio==null ? "γ call/put n/a" : "γ call/put "+gRatio.toFixed(2)+"×", {small:true, info:"pos"});
+})();
+
+/* ---------------- info popovers ---------------- */
+const INFO = {
+  badge: ["Gamma regime (naive)", "POS gamma: assumed dealer books are long gamma, so their hedging sells strength and buys weakness — flows that tend to dampen moves, compress ranges and favor mean-reversion behavior. NEG gamma: dealers are short gamma, so hedging sells weakness and buys strength — flows that tend to amplify moves, widen ranges and let trends extend. The regime changes sign at the gamma flip zone. Textbook long-calls/short-puts assumption, not dealer-calibrated — context beneath order flow, not a signal."],
+  spot: ["Spot (NQ)", "Live NQ futures last. The QQQ→NQ multiplier is derived fresh every run — it bundles the ETF/index ratio and futures basis and drifts intraday, so it is never hardcoded. MNQ is identical in price; micros differ only in $/point."],
+  flip: ["Gamma flip (naive)", "Price where naive net dealer gamma crosses zero on our re-priced grid. Above it, dealer hedging tends to lean against price (dampening); below it, hedging chases price and moves can extend. A zone of ±~20 NQ pts, never a line."],
+  cw:   ["Call wall (naive)", "Strike carrying the heaviest call-side gamma at/above spot. Assumed dealer hedging there tends to lean against rallies — the heaviest opposing flow on the upside map. A zone, not a tick."],
+  pw:   ["Put wall (naive)", "Strike carrying the heaviest put-side gamma at/below spot — the downside analog. Assumed dealer hedging pressure there tends to lean against declines. A zone, not a tick."],
+  regime: ["Net GEX / regime", "Total naive dealer gamma per 1% move, assuming dealers are long calls / short puts (textbook, NOT dealer-calibrated). POS: hedging sells strength and buys weakness (dampening). NEG: hedging sells weakness and buys strength (amplifying)."],
+  em:   ["Expected move", "Front-expiry ATM implied vol × spot × √T — the options market's ~1σ range to that expiry, translated to NQ points via the live multiplier."],
+  iv:   ["ATM implied volatility", "The big number is front-expiry at-the-money IV — the exact input the expected move needs (a 2-day range needs 2-day vol). IV30 is the 30-day interpolation from our same chain: that's the figure comparable to composite IV numbers on sites like Barchart, which blend expiries and the put skew and so read several points higher. Note: Friday-evening marks depress front IV (weekend effect)."],
+  pos:  ["Positioning ratios", "P/C: put vs call open interest across the selected expiries. γ call/put: call-side vs put-side gamma notional inside the ±5% band — which side's hedging pressure dominates the near map."],
+  hist: ["γ by strike", "Gamma notional per strike (calls right/green, puts left/pink) within ±5% of spot. The walls are the dominant bars; spot and flip hairlines are overlaid. Hover any row for exact values; the full table view sits below the charts."],
+  curve:["Net GEX vs price", "Naive net gamma re-priced across a ±7% spot grid (Black-Scholes on each contract's chain IV). The zero crossing nearest spot is the flip. Green segments: dampening territory. Pink: amplifying."],
+  drift:["Session drift", "How flip, walls, spot, the EM band and net γ have moved across today's snapshots. Intraday drift comes from IV, spot and basis — open interest is frozen at last night's OCC settlement, so positioning built today (0DTE) is invisible to this map."],
+};
+(function popovers(){
+  const pop = document.createElement("div"); pop.className = "pop"; document.body.appendChild(pop);
+  let cur = null;
+  const show = btn => {
+    let title, body;
+    if (btn.dataset.info && INFO[btn.dataset.info]) [title, body] = INFO[btn.dataset.info];
+    else if (btn.dataset.popTitle){ title = btn.dataset.popTitle; body = btn.dataset.popBody || ""; }
+    else return;
+    pop.replaceChildren();
+    const b = document.createElement("b"); b.textContent = title;
+    pop.appendChild(b); pop.appendChild(document.createTextNode(body));
+    if (!MULT) pop.appendChild(document.createTextNode(
+      " (Futures quote currently unavailable — the page is showing QQQ-space values.)"));
+    pop.style.display = "block";
+    const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let x = Math.max(8, Math.min(r.left + r.width/2 - pw/2, innerWidth - pw - 8));
+    let y = r.bottom + 8;
+    if (y + ph > innerHeight - 8) y = r.top - ph - 8;
+    pop.style.left = x+"px"; pop.style.top = y+"px"; cur = btn; };
+  const hide = () => { pop.style.display = "none"; cur = null; };
+  const SEL = ".info,[data-pop-title]";
+  document.addEventListener("pointerover", e=>{ if (e.pointerType === "touch") return;
+    const b = e.target.closest(SEL); if (b) show(b); });
+  document.addEventListener("pointerout",  e=>{ if (e.pointerType === "touch") return;
+    if (e.target.closest(SEL)) hide(); });
+  document.addEventListener("focusin",  e=>{ const b = e.target.closest(SEL); if (b) show(b); });
+  document.addEventListener("focusout", e=>{ if (e.target.closest(SEL)) hide(); });
+  document.addEventListener("click", e=>{ const b = e.target.closest(SEL);
+    if (b){ (cur === b && pop.style.display === "block") ? hide() : show(b); e.preventDefault(); }
+    else if (!e.target.closest(".pop")) hide(); });
+})();
+
+/* ---------------- session read (auto-generated) ---------------- */
+(function readout(){
+  const p = $("#readout");
+  const seg = (t, strong) => { if (strong){ const b = document.createElement("b");
+      b.textContent = t; p.appendChild(b); } else p.appendChild(document.createTextNode(t)); };
+  const spotTxt = MULT ? fmtNQ(SNAP.fut) : fmtK(SNAP.spot);
+  const neg = SNAP.regime === "NEG";
+  seg("Net dealer γ is ");
+  seg((neg ? "negative " : "positive ") + fmtB(SNAP.net_gex) + "/1%", true);
+  seg(neg ? " — hedging flows lean with price, so moves tend to extend and ranges widen. "
+          : " — hedging flows lean against price, which tends to dampen moves and contain ranges. ");
+  if (SNAP.flip != null){
+    const d = MULT ? Math.round(SNAP.flip*MULT - SNAP.fut) : +(SNAP.flip - SNAP.spot).toFixed(1);
+    const side = d > 0 ? "below" : "above";     // where spot sits relative to the flip
+    seg("Spot " + spotTxt + " is ");
+    seg(Math.abs(d).toLocaleString('en-US') + (MULT ? " pts" : "") + " " + side +
+        " the flip zone (" + fmtPxV(SNAP.flip) + ")", true);
+    seg(" — crossing that zone is where the naive map's gamma sign flips. ");
+  } else seg("No gamma flip inside ±7% of spot this run. ");
+  seg("Heaviest assumed-dealer hedging strikes: calls " + fmtK(SNAP.call_wall) + " (" + fmtPxV(SNAP.call_wall) +
+      (SNAP.call_wall!=null ? ", " + away(SNAP.call_wall) : "") + "), puts " + fmtK(SNAP.put_wall) +
+      " (" + fmtPxV(SNAP.put_wall) + (SNAP.put_wall!=null ? ", " + away(SNAP.put_wall) : "") + "). ");
+  if (SNAP.em != null)
+    seg("Options price a ±" + (MULT ? fmtNQ(SNAP.em*MULT) + " pt" : SNAP.em.toFixed(1)) +
+        " (" + (SNAP.em/SNAP.spot*100).toFixed(1) + "%) move into " + fmtExp(SNAP.front_exp) +
+        " expiry" + (SNAP.atm_iv ? " on " + (SNAP.atm_iv*100).toFixed(1) + "% ATM IV" : "") +
+        (SNAP.iv30 != null ? " (IV30 ≈ " + (SNAP.iv30*100).toFixed(1) + "%)" : "") + ". ");
+  if (SNAP.em != null && SNAP.call_wall != null && SNAP.put_wall != null){
+    const base = MULT ? SNAP.fut : SNAP.spot, emD = MULT ? SNAP.em*MULT : SNAP.em;
+    const cwD = MULT ? SNAP.call_wall*MULT : SNAP.call_wall;
+    const pwD = MULT ? SNAP.put_wall*MULT : SNAP.put_wall;
+    const up = base + emD >= cwD, dn = base - emD <= pwD;
+    seg(up && dn ? "That range spans beyond both walls — the priced move is bigger than the map's heaviest hedging zones. "
+      : up ? "The upside of that range reaches into the call wall zone. "
+      : dn ? "The downside of that range reaches into the put wall zone. "
+      : "That range sits inside both walls. ");
+  }
+  if (SNAP.atm_iv != null && SNAP.iv30 != null){
+    const r = SNAP.atm_iv / SNAP.iv30;
+    seg(r < 0.9 ? "Front-expiry vol prices calmer near-term movement than the 30-day backdrop. "
+      : r > 1.1 ? "Front-expiry vol is elevated against the 30-day backdrop — near-term movement is being paid up for. "
+      : "Front-expiry vol trades in line with the 30-day backdrop. ");
+  }
+  if (SNAP.pc_oi != null){
+    const lean = SNAP.pc_oi > 1.05 ? "puts" : SNAP.pc_oi < 0.95 ? "calls" : "neither side";
+    let gtxt = "";
+    if (gRatio != null && gRatio > 0)
+      gtxt = gRatio < 1 ? ", and put-side γ outweighs calls " + (1/gRatio).toFixed(1) + "× in the ±5% band"
+           : ", and call-side γ outweighs puts " + gRatio.toFixed(1) + "× in the ±5% band";
+    seg("Open interest leans to " + lean + " (P/C " + SNAP.pc_oi.toFixed(2) + ")" + gtxt + ". ");
+  }
+  if (SNAP.warn)
+    seg("⚠ Chain-greek and re-priced gamma signs disagree this run — spot is likely inside the flip zone; treat the regime call with suspicion. ", true);
+
+  if (DATA.tv_string){
+    const row = $("#tvRow"); row.hidden = false;
+    $("#tvStr").textContent = DATA.tv_string;
+    $("#tvCopy").addEventListener("click", () => {
+      const done = () => { const b = $("#tvCopy"); b.textContent = "Copied ✓";
+        setTimeout(() => { b.textContent = "Copy"; }, 1800); };
+      if (navigator.clipboard && navigator.clipboard.writeText)
+        navigator.clipboard.writeText(DATA.tv_string).then(done, () => {});
+      else { const r = document.createRange(); r.selectNodeContents($("#tvStr"));
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        document.execCommand("copy"); done(); }
+    });
+  }
+  $("#readoutCav").textContent =
+    (!MULT ? "Futures quote unavailable this run — every value on the page is QQQ-space. " : "") +
+    "Naive model — textbook dealer positioning, the same assumption every free source runs on; not dealer-calibrated. " +
+    "Levels are zones (±~20 NQ pts), never ticks. Context beneath order flow, not trade signals.";
+})();
+
+/* ---------------- chart 1: strike histogram ---------------- */
+function renderHist(){
+  const host = $("#hist"); host.replaceChildren();
+  const S = SNAP.strikes; if (!S.length){ host.textContent = "no strikes in band"; return; }
+  const W = Math.max(host.clientWidth, 320);
+  const rows = S.slice().sort((a,b)=>b.k-a.k);
+  const n = rows.length;
+  const rowH = Math.max(5, Math.min(16, Math.floor(520/n)));
+  const barH = Math.max(3, rowH-2);
+  const ML = MULT ? 96 : 62, MR = 88, MT = 8, MB = 32;
+  const plotW = W-ML-MR, plotH = rowH*n, H = plotH+MT+MB;
+  const root = svg("svg", {viewBox:`0 0 ${W} ${H}`, width:W, height:H}, host);
+  const xC = ML+plotW/2, half = plotW/2-4;
+  const maxV = Math.max(...S.map(r=>Math.max(r.call, r.put)), 1);
+  const sc = half/maxV;
+  const yOf = i => MT + i*rowH;
+  // x grid + ticks ($B), mirrored both sides
+  const step = niceStep(maxV);
+  const dec = step >= 5e8 ? 1 : 2;   // labels must not round away the step
+  for (let v = step; v <= maxV; v += step){
+    for (const dir of [1,-1]){
+      svg("line", {x1:xC+dir*v*sc, y1:MT, x2:xC+dir*v*sc, y2:MT+plotH,
+                   stroke:C.grid, "stroke-width":1}, root);
+      txt(root, xC+dir*v*sc, H-14, (v/1e9).toFixed(dec), C.ink3, 10, "middle");
+    }
+  }
+  txt(root, xC, H-2, "γ notional, $B per 1% — puts ◄ · ► calls", C.ink3, 10, "middle");
+  svg("line", {x1:xC, y1:MT, x2:xC, y2:MT+plotH, stroke:C.base, "stroke-width":1}, root);
+  // wall row highlights
+  rows.forEach((r,i)=>{ if (r.k===SNAP.call_wall || r.k===SNAP.put_wall)
+    svg("rect", {x:ML-2, y:yOf(i), width:plotW+4, height:rowH, fill:css('--surface-2'), rx:3}, root); });
+  // bars
+  const layer = svg("g", {}, root);
+  rows.forEach((r,i)=>{
+    const y = yOf(i)+(rowH-barH)/2;
+    const pc = barPath(xC+1, y, r.call*sc, barH, 1);
+    const pp = barPath(xC-1, y, r.put*sc, barH, -1);
+    if (pc) svg("path", {d:pc, fill:C.green}, layer);
+    if (pp) svg("path", {d:pp, fill:C.pink}, layer);
+  });
+  // y labels: at most ~14 ticks; wall labels win over colliding step labels
+  const lstep = Math.max(1, Math.ceil(n/14));
+  const wallIdx = new Set();
+  rows.forEach((r,i)=>{ if (r.k===SNAP.call_wall || r.k===SNAP.put_wall) wallIdx.add(i); });
+  const nearWall = i => !wallIdx.has(i) && rowH < 12 &&
+    [...wallIdx].some(w => Math.abs(w-i) === 1);
+  rows.forEach((r,i)=>{
+    if ((i%lstep===0 && !nearWall(i)) || wallIdx.has(i)){
+      const y = yOf(i)+rowH/2+3.5;
+      txt(root, ML-8, y, MULT ? fmtNQ(r.k*MULT) : fmtK(r.k), C.ink2, 10.5, "end");
+      if (MULT) txt(root, 4, y, fmtK(r.k), C.ink3, 9.5, "start");
+    }
+  });
+  // wall annotations — nudged apart when the walls land on adjacent strikes
+  let cwY = null, pwY = null;
+  rows.forEach((r,i)=>{ const y = yOf(i)+rowH/2+3.5;
+    if (r.k===SNAP.call_wall) cwY = y;
+    if (r.k===SNAP.put_wall)  pwY = y; });
+  if (cwY!=null && pwY!=null && Math.abs(pwY-cwY) < 12){ cwY -= 6; pwY += 6; }
+  const wallNote = (y, col, label) => {
+    svg("circle", {cx:W-MR+10, cy:y-3.5, r:3.5, fill:col, stroke:css('--surface'), "stroke-width":2}, root);
+    txt(root, W-MR+18, y, label, C.ink2, 10, "start", 650);
+  };
+  if (cwY!=null) wallNote(cwY, C.green, "CALL WALL");
+  if (pwY!=null) wallNote(pwY, C.pink, "PUT WALL");
+  // spot + flip hairlines — interpolate between the bracketing rows' centers
+  // (rows are index-positioned; strike spacing can be uneven, so a plain
+  // price-proportional mapping would drift off the rows it sits between)
+  const yC = j => yOf(j) + rowH/2;
+  const yAt = price => {
+    if (price == null || price > rows[0].k || price < rows[n-1].k) return null;
+    let i = 0;
+    while (i < n-1 && rows[i+1].k >= price) i++;
+    if (i >= n-1 || rows[i].k === price) return yC(i);
+    const a = rows[i].k, b = rows[i+1].k;
+    return yC(i) + ((a-price)/(a-b||1)) * (yC(i+1)-yC(i));
+  };
+  const marker = (price, color, label) => {
+    const y = yAt(price);
+    if (y == null) return;
+    svg("line", {x1:ML-2, y1:y, x2:W-MR+2, y2:y, stroke:color, "stroke-width":1.5,
+                 opacity:.9, style:`filter:drop-shadow(0 0 4px ${color})`}, root);
+    txt(root, W-MR+6, y+3.5, `${label} ${fmtPxV(price)}`, C.ink2, 10, "start", 650);
+  };
+  marker(SNAP.spot, C.neutral, "SPOT");
+  marker(SNAP.flip, "#c9962e", "FLIP");
+  // hover — row lift + tooltip
+  const tt = tooltip(host);
+  const hl = svg("rect", {x:ML-2, y:0, width:plotW+4, height:rowH,
+                          fill:"rgba(255,255,255,.055)", rx:3, opacity:0}, root);
+  const hit = svg("rect", {x:0, y:MT, width:W, height:plotH, fill:"transparent"}, root);
+  hit.addEventListener("pointermove", e=>{
+    const r = host.getBoundingClientRect();
+    const sy = (e.clientY-r.top) * (H/r.height);
+    const i = Math.max(0, Math.min(n-1, Math.floor((sy-MT)/rowH)));
+    const row = rows[i];
+    hl.setAttribute("y", yOf(i)); hl.setAttribute("opacity", 1);
+    tt.set(`${MULT ? fmtNQ(row.k*MULT)+" · " : ""}${SNAP.sym} ${fmtK(row.k)}`, [
+      ["Call γ", fmtB(row.call), C.green],
+      ["Put γ",  fmtB(-row.put), C.pink],
+      ["Net",    fmtB(row.net),  null],
+    ]);
+    tt.show(e.clientX-r.left, e.clientY-r.top);
+  });
+  hit.addEventListener("pointerleave", ()=>{ tt.hide(); hl.setAttribute("opacity", 0); });
+}
+
+/* ---------------- chart 2: GEX(S) curve ---------------- */
+function renderCurve(){
+  const host = $("#curve"); host.replaceChildren();
+  const P = SNAP.curve; if (!P.length){ host.textContent = "no curve"; return; }
+  const W = Math.max(host.clientWidth, 320), H = 240;
+  const ML = 46, MR = 14, MT = 12, MB = 30;
+  const plotW = W-ML-MR, plotH = H-MT-MB;
+  const root = svg("svg", {viewBox:`0 0 ${W} ${H}`, width:W, height:H}, host);
+  const xs = P.map(p=>toPx(p.s)), ys = P.map(p=>p.net);
+  const x0 = xs[0], x1 = xs[xs.length-1];
+  let yMin = Math.min(...ys, 0), yMax = Math.max(...ys, 0);
+  const pad = (yMax-yMin)*0.08 || 1; yMin -= pad; yMax += pad;
+  const X = v => ML + (v-x0)/(x1-x0)*plotW;
+  const Y = v => MT + (yMax-v)/(yMax-yMin)*plotH;
+  // grid + y ticks
+  const stepY = niceStep(yMax-yMin);
+  const decY = stepY >= 5e8 ? 1 : 2;          // labels must not round away the step
+  for (let v = Math.ceil(yMin/stepY)*stepY; v <= yMax; v += stepY){
+    svg("line", {x1:ML, y1:Y(v), x2:W-MR, y2:Y(v), stroke:C.grid, "stroke-width":1}, root);
+    txt(root, ML-6, Y(v)+3.5, (v/1e9).toFixed(decY)+"B", C.ink3, 10, "end");
+  }
+  svg("line", {x1:ML, y1:Y(0), x2:W-MR, y2:Y(0), stroke:C.base, "stroke-width":1.2}, root);
+  // x ticks
+  const stepX = niceStep(x1-x0);
+  for (let v = Math.ceil(x0/stepX)*stepX; v <= x1; v += stepX){
+    if (X(v) > W-MR-26) continue;           // never clip against the right edge
+    txt(root, X(v), H-10, fmtNQ(v), C.ink3, 10, "middle");
+  }
+  txt(root, W-MR, H-3, `price (${SPACE})`, C.ink3, 9.5, "end");
+  // sign-split segments with washes (diverging polarity: green above 0, pink below)
+  let seg = [], sign = ys[0] >= 0;
+  const flush = () => { if (seg.length < 2){ seg = seg.slice(-1); return; }
+    const col = sign ? C.green : C.pink;
+    const dLine = "M" + seg.map(p=>`${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" L");
+    svg("path", {d:dLine + ` L${X(seg[seg.length-1][0]).toFixed(1)},${Y(0)} L${X(seg[0][0]).toFixed(1)},${Y(0)} Z`,
+                 fill:col, opacity:.1}, root);
+    svg("path", {d:dLine, fill:"none", stroke:col, "stroke-width":2,
+                 "stroke-linejoin":"round", "stroke-linecap":"round"}, root);
+    seg = seg.slice(-1); };
+  for (let i = 0; i < P.length; i++){
+    const px_ = toPx(P[i].s), py = ys[i];
+    if ((py >= 0) !== sign && seg.length){
+      const [ax, ay] = seg[seg.length-1];
+      const t = ay/(ay-py), cx = ax + (px_-ax)*t;   // zero crossing
+      seg.push([cx, 0]); flush(); sign = py >= 0; seg = [[cx, 0]];
+    }
+    seg.push([px_, py]);
+  }
+  flush();
+  // spot + flip markers
+  const spotX = toPx(SNAP.spot);
+  svg("line", {x1:X(spotX), y1:MT, x2:X(spotX), y2:MT+plotH, stroke:C.neutral,
+               "stroke-width":1, opacity:.55}, root);
+  txt(root, X(spotX)+4, MT+10, "SPOT "+fmtPxV(SNAP.spot), C.ink2, 10, "start", 650);
+  if (SNAP.flip != null){
+    const fx = X(toPx(SNAP.flip));
+    svg("circle", {cx:fx, cy:Y(0), r:4.5, fill:"#c9962e", stroke:css('--surface'),
+                   "stroke-width":2, style:"filter:drop-shadow(0 0 5px rgba(255,201,51,.7))"}, root);
+    txt(root, fx+7, Y(0)-8, "FLIP "+fmtPxV(SNAP.flip), C.ink2, 10, "start", 650);
+  }
+  // crosshair
+  const tt = tooltip(host);
+  const cross = svg("line", {x1:0, y1:MT, x2:0, y2:MT+plotH, stroke:C.ink3,
+                             "stroke-width":1, opacity:0}, root);
+  const dot = svg("circle", {r:4, fill:C.neutral, stroke:css('--surface'),
+                             "stroke-width":2, opacity:0}, root);
+  const hit = svg("rect", {x:ML, y:MT, width:plotW, height:plotH, fill:"transparent"}, root);
+  hit.addEventListener("pointermove", e=>{
+    const r = host.getBoundingClientRect();
+    const sx = (e.clientX-r.left) * (W/r.width);
+    const v = x0 + (sx-ML)/plotW*(x1-x0);
+    let best = 0, bd = Infinity;
+    xs.forEach((x,i)=>{ const d = Math.abs(x-v); if (d < bd){ bd = d; best = i; } });
+    cross.setAttribute("x1", X(xs[best])); cross.setAttribute("x2", X(xs[best]));
+    cross.setAttribute("opacity", .6);
+    dot.setAttribute("cx", X(xs[best])); dot.setAttribute("cy", Y(ys[best]));
+    dot.setAttribute("fill", ys[best] >= 0 ? C.green : C.pink); dot.setAttribute("opacity", 1);
+    tt.set(fmtNQ(xs[best]) + " " + SPACE, [["Net GEX", fmtB(ys[best]), ys[best]>=0?C.green:C.pink]]);
+    tt.show(e.clientX-r.left, e.clientY-r.top);
+  });
+  hit.addEventListener("pointerleave", ()=>{ tt.hide();
+    cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); });
+}
+
+/* ---------------- chart 3: session drift ---------------- */
+function renderDrift(){
+  const host = $("#drift"); host.replaceChildren();
+  const leg = $("#driftLegend"); leg.replaceChildren();
+  const series = [
+    {key:"spot", lab:"Spot",      col:C.neutral, get:h=>h.mult ? h.fut       : null},
+    {key:"flip", lab:"Flip",      col:"#c9962e", get:h=>h.mult && h.flip!=null ? h.flip*h.mult : null},
+    {key:"cw",   lab:"Call Wall", col:C.green,   get:h=>(h.mult && h.cw!=null) ? h.cw*h.mult : null},
+    {key:"pw",   lab:"Put Wall",  col:C.pink,    get:h=>(h.mult && h.pw!=null) ? h.pw*h.mult : null},
+  ];
+  for (const s of series){ const k = document.createElement("span"); k.className = "key";
+    const sw = document.createElement("span"); sw.className = "swl"; sw.style.borderTopColor = s.col;
+    k.appendChild(sw); k.appendChild(document.createTextNode(s.lab.toUpperCase())); leg.appendChild(k); }
+  const tminOf = t => { const m = /T(\d\d):(\d\d)/.exec(t); return m ? +m[1]*60 + +m[2] : 0; };
+  const WIN0 = 8*60+30, WIN1 = 16*60;         // graph shows 08:30–16:00 ET only
+  const HISTW = HIST.filter(h => { const m = tminOf(h.t); return m >= WIN0 && m <= WIN1; });
+  if (!HISTW.length){ host.innerHTML =
+    '<div class="empty">no snapshots in the 08:30–16:00 ET window yet</div>'; return; }
+  const anyNQ = HISTW.some(h=>h.mult);
+  if (!anyNQ){ host.innerHTML =
+    '<div class="empty">no futures quote yet today — NQ drift needs the multiplier; see snapshots table</div>'; return; }
+  const W = Math.max(host.clientWidth, 420);
+  const H1 = 250, H2 = 110, GAP = 26, MB = 26, MT = 10;
+  const H = MT+H1+GAP+H2+MB;
+  const ML = 58, MR = 104;
+  const plotW = W-ML-MR;
+  const root = svg("svg", {viewBox:`0 0 ${W} ${H}`, width:W, height:H}, host);
+  const ts = HISTW.map(h=>tminOf(h.t));
+  const tx0 = WIN0, tx1 = WIN1;               // fixed session axis
+  const X = m => ML + (m-tx0)/(tx1-tx0)*plotW;
+  // ---- top panel: levels
+  const vals = [];
+  for (const h of HISTW){ for (const s of series){ const v = s.get(h); if (v!=null) vals.push(v); }
+    if (h.mult && h.em!=null){ vals.push(h.fut+h.em*h.mult, h.fut-h.em*h.mult); } }
+  let yMin = Math.min(...vals), yMax = Math.max(...vals);
+  const pad = (yMax-yMin)*0.09 || yMax*0.002; yMin -= pad; yMax += pad;
+  const Y1 = v => MT + (yMax-v)/(yMax-yMin)*H1;
+  const stepY = niceStep(yMax-yMin);
+  for (let v = Math.ceil(yMin/stepY)*stepY; v <= yMax; v += stepY){
+    svg("line", {x1:ML, y1:Y1(v), x2:W-MR, y2:Y1(v), stroke:C.grid, "stroke-width":1}, root);
+    txt(root, ML-7, Y1(v)+3.5, fmtNQ(v), C.ink3, 10, "end");
+  }
+  // EM band (neutral wash — projection zone, not a series)
+  const emPts = HISTW.filter(h=>h.mult && h.em!=null);
+  if (emPts.length){
+    const up = emPts.map(h=>[X(tminOf(h.t)), Y1(h.fut+h.em*h.mult)]);
+    const dn = emPts.map(h=>[X(tminOf(h.t)), Y1(h.fut-h.em*h.mult)]).reverse();
+    if (emPts.length === 1){ const x = up[0][0];
+      svg("rect", {x:x-8, y:up[0][1], width:16, height:dn[0][1]-up[0][1], fill:C.ink3, opacity:.14, rx:3}, root);
+    } else {
+      svg("path", {d:"M"+up.concat(dn).map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" L")+" Z",
+                   fill:C.ink3, opacity:.12}, root);
+    }
+  }
+  // series lines + end labels with collision nudge
+  const single = HISTW.length === 1;
+  const ends = [];
+  for (const s of series){
+    const pts = HISTW.map((h,i)=>{ const v = s.get(h); return v==null ? null : [X(ts[i]), Y1(v), v]; });
+    const runs = []; let cur = [];
+    for (const p of pts){ if (p) cur.push(p); else { if (cur.length) runs.push(cur); cur = []; } }
+    if (cur.length) runs.push(cur);
+    for (const run of runs){
+      if (run.length > 1)
+        svg("path", {d:"M"+run.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" L"),
+          fill:"none", stroke:s.col, "stroke-width":2, "stroke-linejoin":"round",
+          "stroke-linecap":"round"}, root);
+      if (single || run.length === 1)
+        svg("circle", {cx:run[run.length-1][0], cy:run[run.length-1][1], r:4,
+          fill:s.col, stroke:css('--surface'), "stroke-width":2}, root);
+    }
+    const lastPt = [...pts].reverse().find(p=>p);
+    if (lastPt) ends.push({y:lastPt[1], col:s.col, lab:s.lab.toUpperCase(), v:lastPt[2]});
+  }
+  if (emPts.length){          // EM edge labels join the collision pass (muted, no key)
+    const last = emPts[emPts.length-1];
+    ends.push({y:Y1(last.fut+last.em*last.mult), lab:"EM+", muted:true});
+    ends.push({y:Y1(last.fut-last.em*last.mult), lab:"EM−", muted:true});
+  }
+  ends.sort((a,b)=>a.y-b.y);
+  for (let i = 1; i < ends.length; i++)
+    if (ends[i].y - ends[i-1].y < 13) ends[i].y = ends[i-1].y + 13;
+  for (const e of ends){
+    if (e.muted){ txt(root, W-MR+6, e.y+3, e.lab, C.ink3, 9.5); continue; }
+    svg("line", {x1:W-MR+2, y1:e.y, x2:W-MR+14, y2:e.y, stroke:e.col, "stroke-width":2.5}, root);
+    txt(root, W-MR+18, e.y+3.5, `${e.lab} ${fmtNQ(e.v)}`, C.ink2, 10, "start", 650);
+  }
+  txt(root, ML, MT-1, `levels · ${SNAP.fx} pts (zones, not ticks)`, C.ink3, 10);
+  // ---- bottom panel: net GEX
+  const T2 = MT+H1+GAP;
+  const nets = HISTW.map(h=>h.net);
+  let nMin = Math.min(...nets, 0), nMax = Math.max(...nets, 0);
+  const npad = (nMax-nMin)*0.15 || 1; nMin -= npad; nMax += npad;
+  const Y2 = v => T2 + (nMax-v)/(nMax-nMin)*H2;
+  const seen = new Set();
+  for (const v of [Math.min(...nets), 0, Math.max(...nets)]){
+    const lab = (v/1e9).toFixed(1)+"B";
+    if (seen.has(lab)) continue; seen.add(lab);
+    txt(root, ML-7, Y2(v)+3.5, lab, C.ink3, 9.5, "end");
+  }
+  svg("line", {x1:ML, y1:Y2(0), x2:W-MR, y2:Y2(0), stroke:C.base, "stroke-width":1}, root);
+  txt(root, ML, T2-5, "net γ · $B per 1%", C.ink3, 10);
+  if (single){
+    svg("circle", {cx:X(ts[0]), cy:Y2(nets[0]), r:4, fill:nets[0]>=0?C.green:C.pink,
+                   stroke:css('--surface'), "stroke-width":2}, root);
+  } else {
+    let seg = [], sign = nets[0] >= 0;
+    const flush = () => { if (seg.length >= 2){ const col = sign ? C.green : C.pink;
+        const d = "M"+seg.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" L");
+        svg("path", {d, fill:"none", stroke:col, "stroke-width":2,
+                     "stroke-linejoin":"round", "stroke-linecap":"round"}, root); }
+      seg = seg.slice(-1); };
+    for (let i = 0; i < HISTW.length; i++){
+      const x = X(ts[i]), yv = nets[i];
+      if ((yv >= 0) !== sign && seg.length){
+        const prev = seg[seg.length-1];
+        const t = prev[2]/(prev[2]-yv), cx = prev[0] + (x-prev[0])*t;
+        seg.push([cx, Y2(0), 0]); flush(); sign = yv >= 0; seg = [[cx, Y2(0), 0]];
+      }
+      seg.push([x, Y2(yv), yv]);
+    }
+    flush();
+  }
+  // regime strip — POS/NEG per snapshot, under the net panel
+  const stripY = T2 + H2 + 6;
+  HISTW.forEach((h,i)=>{
+    const x0 = i ? (X(ts[i-1])+X(ts[i]))/2 : X(ts[i])-4;
+    const x1 = i < HISTW.length-1 ? (X(ts[i])+X(ts[i+1]))/2 : X(ts[i])+4;
+    svg("rect", {x:x0, y:stripY, width:Math.max(2, x1-x0), height:4,
+                 fill:h.regime==="POS"?C.green:C.pink, opacity:.85, rx:1}, root);
+  });
+  txt(root, ML-7, stripY+4.5, "regime", C.ink3, 9, "end");
+  // x ticks (shared)
+  const tstep = (tx1-tx0) > 180 ? 60 : 30;
+  for (let m = Math.ceil(tx0/tstep)*tstep; m <= tx1; m += tstep){
+    const hh = String(Math.floor(m/60)).padStart(2,"0"), mm = String(m%60).padStart(2,"0");
+    txt(root, X(m), H-8, hh+":"+mm, C.ink3, 10, "middle");
+    svg("line", {x1:X(m), y1:T2, x2:X(m), y2:T2+H2, stroke:C.grid, "stroke-width":1}, root);
+  }
+  txt(root, W-MR, H-8, "ET", C.ink3, 9.5, "start");
+  // RTH open marker — session-structure reference, recessive hairline
+  const openMin = 9*60 + 30;
+  if (openMin > tx0 && openMin < tx1){
+    svg("line", {x1:X(openMin), y1:MT, x2:X(openMin), y2:T2+H2, stroke:C.base, "stroke-width":1}, root);
+    txt(root, X(openMin)+4, MT+9, "RTH open", C.ink3, 9);
+  }
+  // crosshair across both panels
+  const tt = tooltip(host);
+  const cross = svg("line", {x1:0, y1:MT, x2:0, y2:T2+H2, stroke:C.ink3, "stroke-width":1, opacity:0}, root);
+  const hit = svg("rect", {x:ML, y:MT, width:plotW, height:T2+H2-MT, fill:"transparent"}, root);
+  hit.addEventListener("pointermove", e=>{
+    const r = host.getBoundingClientRect();
+    const sx = (e.clientX-r.left)*(W/r.width);
+    const m = tx0 + (sx-ML)/plotW*(tx1-tx0);
+    let best = 0, bd = Infinity;
+    ts.forEach((t,i)=>{ const d = Math.abs(t-m); if (d < bd){ bd = d; best = i; } });
+    const h = HISTW[best];
+    cross.setAttribute("x1", X(ts[best])); cross.setAttribute("x2", X(ts[best]));
+    cross.setAttribute("opacity", .55);
+    const rowsT = [];
+    const pv = v => h.mult ? fmtNQ(v) : "—";
+    rowsT.push(["Spot", h.mult ? fmtNQ(h.fut) : fmtK(h.spot), C.neutral]);
+    rowsT.push(["Flip", h.flip==null ? "none" : (h.mult ? fmtNQ(h.flip*h.mult) : fmtK(h.flip)), "#c9962e"]);
+    rowsT.push(["Call Wall", (h.mult && h.cw!=null) ? fmtNQ(h.cw*h.mult) : fmtK(h.cw), C.green]);
+    rowsT.push(["Put Wall",  (h.mult && h.pw!=null) ? fmtNQ(h.pw*h.mult) : fmtK(h.pw), C.pink]);
+    if (h.em!=null && h.mult) rowsT.push(["EM ±", fmtNQ(h.em*h.mult)+" pts", null]);
+    rowsT.push(["Net γ", fmtB(h.net)+" · "+h.regime, h.net>=0?C.green:C.pink]);
+    tt.set(etHM(h.t)+" ET", rowsT);
+    tt.show(e.clientX-r.left, e.clientY-r.top);
+  });
+  hit.addEventListener("pointerleave", ()=>{ tt.hide(); cross.setAttribute("opacity", 0); });
+  const note = $("#driftNote");
+  const histDate = DATA.history_date, curDate = DATA.meta.generated_et.slice(0, 10);
+  if (histDate && histDate !== curDate)
+    note.textContent = "showing the " + fmtExp(histDate) +
+                       " session — the next session picks up from 08:30 ET";
+  else if (single)
+    note.textContent = "first snapshot of the session — drift builds as the collector loops";
+}
+
+/* ---------------- tables ---------------- */
+function makeTable(host, cols, rows, hlFn){
+  const t = document.createElement("table");
+  const thr = document.createElement("tr");
+  for (const c of cols){ const th = document.createElement("th"); th.textContent = c; thr.appendChild(th); }
+  t.appendChild(thr);
+  for (const r of rows){
+    const tr = document.createElement("tr");
+    if (hlFn && hlFn(r)) tr.className = "hl";
+    for (const cell of r.cells){
+      const td = document.createElement("td");
+      if (cell && cell.tag){ const s = document.createElement("span"); s.className = "tag";
+        const d = document.createElement("span"); d.className = "dot "+cell.dot;
+        s.appendChild(d); s.appendChild(document.createTextNode(cell.tag)); td.appendChild(s); }
+      else td.textContent = cell==null ? "—" : cell;
+      tr.appendChild(td); }
+    t.appendChild(tr); }
+  host.replaceChildren(t);
+}
+function paginate(host, cols, rows, hlFn, pageSize){
+  pageSize = pageSize || 20;
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  let page = 0;
+  const render = () => {
+    const wrap = document.createElement("div");
+    makeTable(wrap, cols, rows.slice(page*pageSize, (page+1)*pageSize), hlFn);
+    if (pages > 1){
+      const nav = document.createElement("div"); nav.className = "pgnav";
+      const btn = (label, d, dis) => { const b = document.createElement("button");
+        b.className = "pgbtn"; b.type = "button"; b.textContent = label; b.disabled = dis;
+        b.addEventListener("click", ()=>{ page += d; render(); }); nav.appendChild(b); };
+      btn("‹ prev", -1, page === 0);
+      const info = document.createElement("span");
+      info.textContent = (page*pageSize+1) + "–" + Math.min(rows.length, (page+1)*pageSize) +
+                         " of " + rows.length;
+      nav.appendChild(info);
+      btn("next ›", 1, page >= pages-1);
+      wrap.appendChild(nav);
+    }
+    host.replaceChildren(wrap);
+  };
+  render();
+}
+(function tables(){
+  const per = {}; SNAP.strikes.forEach(r=>per[r.k]=r);
+  const tagOf = k => k===SNAP.call_wall ? {tag:"CALL WALL", dot:"g"}
+                   : k===SNAP.put_wall  ? {tag:"PUT WALL",  dot:"p"} : "";
+  // ladder display: engine's top-|net| strikes PLUS the walls, always — a wall
+  // whose call/put γ nearly cancel can rank below the top-6 by |net| (the
+  // computation stays frozen; this is presentation only)
+  const ladKs = [...new Set([...SNAP.ladder, SNAP.call_wall, SNAP.put_wall]
+                .filter(k => k != null && per[k]))].sort((a,b)=>b-a);
+  const ladRows = ladKs.map(k=>{ const r = per[k]; return {
+    k, cells:[fmtK(k), MULT?fmtNQ(k*MULT):"—", fmtB(r.call), fmtB(-r.put), fmtB(r.net), tagOf(k)]};});
+  makeTable($("#ladder"), ["strike", SNAP.fx+"≈", "call γ", "put γ", "net", ""],
+            ladRows, r=>r.k===SNAP.call_wall||r.k===SNAP.put_wall);
+  const allRows = SNAP.strikes.slice().sort((a,b)=>b.k-a.k).map(r=>({k:r.k, cells:[
+    fmtK(r.k), MULT?fmtNQ(r.k*MULT):"—", fmtB(r.call), fmtB(-r.put), fmtB(r.net), tagOf(r.k)]}));
+  paginate($("#strikesTable"), ["strike", SNAP.fx+"≈", "call γ", "put γ", "net", ""],
+           allRows, r=>r.k===SNAP.call_wall||r.k===SNAP.put_wall);
+  const snapRows = HIST.slice().reverse().map(h=>({cells:[
+    etHM(h.t)+" ET",
+    h.mult ? fmtNQ(h.fut) : fmtK(h.spot)+" ("+SNAP.sym+")",
+    h.flip==null ? "none" : (h.mult ? fmtNQ(h.flip*h.mult) : fmtK(h.flip)),
+    h.mult ? fmtNQ(h.cw*h.mult) : fmtK(h.cw),
+    h.mult ? fmtNQ(h.pw*h.mult) : fmtK(h.pw),
+    (h.em!=null && h.mult) ? "±"+fmtNQ(h.em*h.mult) : "—",
+    fmtB(h.net), h.regime]}));
+  paginate($("#snapsTable"),
+    ["time ↓", "spot", "flip", "call wall", "put wall", "EM", "net γ/1%", "regime"], snapRows);
+})();
+
+/* ---------------- footer ---------------- */
+(function footer(){
+  const f = $("#foot");
+  const subs = Object.entries(SNAP.sub || {}).map(([e,v])=>{
+    const d = new Date(e+"T12:00:00");
+    return d.toLocaleDateString('en-US',{month:'short',day:'2-digit'})+" "+fmtB(v); }).join(" · ");
+  const parts = [
+    "<b>naive</b> means exactly that: every number here assumes dealers are long calls / short puts (textbook), NOT dealer-calibrated positioning — this is not SpotGamma/MenthorQ.",
+    "Translated levels are <b>zones, not ticks</b> (1 QQQ strike ≈ 41–42 NQ pts → ±~20 NQ pts).",
+    "This map is <b>context beneath order flow, not trade signals</b>.",
+    `Per-expiry net γ: ${subs || "—"}.`,
+    `Naive DEX ${fmtB(SNAP.dex)} (natural-sign Δ notional) — positioning tilt only.`,
+    `Sources: Cboe delayed chains (~15 min) · CNBC futures quote — unofficial-but-stable endpoints; failures are surfaced above, never silent.`,
+    `OI refreshes overnight (OCC settlement); intraday snapshots re-price IV/spot on frozen OI.`,
+    "Personal use only — redistributing market data commercially requires exchange licenses.",
+  ];
+  f.innerHTML = parts.join(" ");
+})();
+
+/* ---------------- render + resize ---------------- */
+function renderAll(){ renderHist(); renderCurve(); renderDrift(); }
+renderAll();
+let rT = null;
+addEventListener("resize", ()=>{ clearTimeout(rT); rT = setTimeout(renderAll, 160); });
+</script>
+</body>
+</html>

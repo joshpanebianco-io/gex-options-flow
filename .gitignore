@@ -1,0 +1,18 @@
+# runtime data & generated outputs (the collector recreates all of these)
+nqgex.db
+cache/
+dashboard.html
+levels.json
+levels.txt
+tv_levels.txt
+runs.log
+runs_console.log
+
+# python
+__pycache__/
+*.pyc
+
+# local editor/agent settings
+
+# secrets (none currently — keep the pattern so keys can never be committed)
+*.key

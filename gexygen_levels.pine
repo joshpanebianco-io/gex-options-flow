@@ -1,0 +1,83 @@
+//@version=6
+// GEX Levels — GEXYGEN paste-string delivery (Pine is sandboxed: no network or
+// file access, so paste-string is the standard TV integration, SpotGamma-style).
+// Paste the one-line string from tv_levels.txt or the dashboard's
+// "TradingView string" row, e.g.:
+//   FLIP=28652;CW=28929;PW=28102;EMH=28656;EML=27918;L1=27689;L2=27896
+// Levels are naive (textbook dealer assumption) zones of ±~20 NQ pts — context
+// beneath order flow, not signals.
+indicator("GEX Levels", shorttitle = "GEX", overlay = true, max_lines_count = 60, max_labels_count = 60, max_boxes_count = 60)
+
+src = input.text_area("", "GEXYGEN levels string")
+
+grpL = "Levels"
+showZones  = input.bool(true,  "Shade ±zone around flip & walls", group = grpL)
+zoneW      = input.float(20.0, "Zone half-width (pts)", minval = 0, step = 1, group = grpL)
+showLadder = input.bool(true,  "Show ladder levels", group = grpL)
+showEM     = input.bool(true,  "Show expected-move range", group = grpL)
+
+grpS = "Style"
+lineW      = input.int(1, "Line width", minval = 1, maxval = 4, group = grpS)
+lblSizeOpt = input.string("Small", "Label size", options = ["Tiny", "Small", "Normal", "Large"], group = grpS)
+lblOff     = input.int(6, "Label offset (bars right of price)", minval = 0, maxval = 100, group = grpS)
+zoneT      = input.int(92, "Zone shade transparency", minval = 80, maxval = 99, group = grpS)
+
+grpC = "Colors"
+cFlip = input.color(#C9962E, "Gamma flip", group = grpC)
+cCW   = input.color(#00AC77, "Call wall",  group = grpC)
+cPW   = input.color(#BC2071, "Put wall",   group = grpC)
+cEM   = input.color(#7A8499, "Expected move", group = grpC)
+cLad  = input.color(#555E70, "Ladder", group = grpC)
+
+lblSize = lblSizeOpt == "Tiny" ? size.tiny : lblSizeOpt == "Small" ? size.small : lblSizeOpt == "Normal" ? size.normal : size.large
+
+var array<line>  lns = array.new<line>()
+var array<label> lbs = array.new<label>()
+var array<box>   bxs = array.new<box>()
+
+clearAll() =>
+    for l in lns
+        line.delete(l)
+    for lb in lbs
+        label.delete(lb)
+    for b in bxs
+        box.delete(b)
+    array.clear(lns)
+    array.clear(lbs)
+    array.clear(bxs)
+
+drawLevel(float price, color col, string txt, bool dashed, bool zone) =>
+    int xr = bar_index + lblOff
+    // line runs through history and STOPS where the label begins — no
+    // line-through-text; the label also carries an opaque chart-bg fill
+    array.push(lns, line.new(bar_index - 1, price, xr, price,
+         extend = extend.left, color = col, width = lineW,
+         style = dashed ? line.style_dashed : line.style_solid))
+    array.push(lbs, label.new(xr, price, txt,
+         style = label.style_label_left, color = chart.bg_color,
+         textcolor = col, size = lblSize))
+    if zone and showZones and zoneW > 0
+        array.push(bxs, box.new(bar_index - 1, price + zoneW, bar_index, price - zoneW,
+             extend = extend.both, bgcolor = color.new(col, zoneT),
+             border_color = color.new(col, zoneT > 93 ? 93 : zoneT)))
+
+if barstate.islast
+    clearAll()
+    if str.length(src) > 0
+        parts = str.split(src, ";")
+        for p in parts
+            kv = str.split(str.trim(p), "=")
+            if array.size(kv) == 2
+                key = str.upper(str.trim(array.get(kv, 0)))
+                val = str.tonumber(str.trim(array.get(kv, 1)))
+                if not na(val)
+                    if key == "FLIP"
+                        drawLevel(val, cFlip, "FLIP " + str.tostring(val, "#,###"), false, true)
+                    else if key == "CW"
+                        drawLevel(val, cCW, "CALL WALL " + str.tostring(val, "#,###"), false, true)
+                    else if key == "PW"
+                        drawLevel(val, cPW, "PUT WALL " + str.tostring(val, "#,###"), false, true)
+                    else if (key == "EMH" or key == "EML") and showEM
+                        drawLevel(val, cEM, (key == "EMH" ? "EM+ " : "EM- ") + str.tostring(val, "#,###"), true, false)
+                    else if str.startswith(key, "L") and showLadder
+                        drawLevel(val, cLad, key + " " + str.tostring(val, "#,###"), false, false)
