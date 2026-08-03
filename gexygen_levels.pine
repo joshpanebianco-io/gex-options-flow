@@ -3,7 +3,15 @@
 // file access, so paste-string is the standard TV integration, SpotGamma-style).
 // Paste the one-line string from tv_levels.txt or the dashboard's
 // "TradingView string" row, e.g.:
-//   FLIP=28652;CW=28929;PW=28102;EMH=28656;EML=27918;L1=27689;L2=27896
+//   FLIP=28536;CW=28941;PW=28114;PWA=29147;EMH=28608;EML=28366;L1P=27907;L2C=28691
+// Keys: FLIP zero gamma · CW/PW primary call/put walls · PWA put wall ABOVE zero
+// gamma · CWB call wall BELOW zero gamma · EMH/EML expected-move edges ·
+// L<n>C / L<n>P ladder levels, suffix = the side whose gamma dominates that
+// strike (older strings with a bare L<n> still parse, drawn side-unknown).
+// The collector finds ladder levels two ways — top net gamma, and strikes loaded
+// on both sides that net gamma alone would miss — but they arrive on the same
+// L keys and draw identically here. Which rule found a level is a dashboard
+// question, not a chart one.
 // Levels are naive (textbook dealer assumption) zones of ±~20 NQ pts — context
 // beneath order flow, not signals.
 indicator("GEX Levels", shorttitle = "GEX", overlay = true, max_lines_count = 60, max_labels_count = 60, max_boxes_count = 60)
@@ -13,6 +21,7 @@ src = input.text_area("", "GEXYGEN levels string")
 grpL = "Levels"
 showZones  = input.bool(true,  "Shade ±zone around flip & walls", group = grpL)
 zoneW      = input.float(20.0, "Zone half-width (pts)", minval = 0, step = 1, group = grpL)
+showSec    = input.bool(true,  "Show secondary walls (puts above / calls below zero gamma)", group = grpL)
 showLadder = input.bool(true,  "Show ladder levels", group = grpL)
 showEM     = input.bool(true,  "Show expected-move range", group = grpL)
 
@@ -26,8 +35,12 @@ grpC = "Colors"
 cFlip = input.color(#C9962E, "Gamma flip", group = grpC)
 cCW   = input.color(#00AC77, "Call wall",  group = grpC)
 cPW   = input.color(#BC2071, "Put wall",   group = grpC)
+cPWA  = input.color(#8E2A5E, "Put wall above zero gamma",  group = grpC)
+cCWB  = input.color(#0A7D5A, "Call wall below zero gamma", group = grpC)
 cEM   = input.color(#7A8499, "Expected move", group = grpC)
-cLad  = input.color(#555E70, "Ladder", group = grpC)
+cLadC = input.color(#3F6B5C, "Ladder — call-driven", group = grpC)
+cLadP = input.color(#6B3F55, "Ladder — put-driven",  group = grpC)
+cLad  = input.color(#555E70, "Ladder — side unknown", group = grpC)
 
 lblSize = lblSizeOpt == "Tiny" ? size.tiny : lblSizeOpt == "Small" ? size.small : lblSizeOpt == "Normal" ? size.normal : size.large
 
@@ -77,7 +90,21 @@ if barstate.islast
                         drawLevel(val, cCW, "CALL WALL " + str.tostring(val, "#,###"), false, true)
                     else if key == "PW"
                         drawLevel(val, cPW, "PUT WALL " + str.tostring(val, "#,###"), false, true)
+                    else if key == "PWA" and showSec
+                        // put mass sitting ABOVE the zero-gamma level — the
+                        // notable exception to the usual downside-put shape
+                        drawLevel(val, cPWA, "PUT WALL ▲ZG " + str.tostring(val, "#,###"), false, true)
+                    else if key == "CWB" and showSec
+                        drawLevel(val, cCWB, "CALL WALL ▼ZG " + str.tostring(val, "#,###"), false, true)
                     else if (key == "EMH" or key == "EML") and showEM
                         drawLevel(val, cEM, (key == "EMH" ? "EM+ " : "EM- ") + str.tostring(val, "#,###"), true, false)
-                    else if str.startswith(key, "L") and showLadder
-                        drawLevel(val, cLad, key + " " + str.tostring(val, "#,###"), false, false)
+                    else if str.startswith(key, "L") and str.length(key) >= 2 and showLadder
+                        // L<n>C / L<n>P — trailing letter is the dominant side
+                        // at that strike; a bare L<n> (older string) draws neutral
+                        sfx   = str.substring(key, str.length(key) - 1)
+                        isC   = sfx == "C"
+                        isP   = sfx == "P"
+                        num   = isC or isP ? str.substring(key, 1, str.length(key) - 1) : str.substring(key, 1)
+                        ladCol  = isC ? cLadC : isP ? cLadP : cLad
+                        sideTxt = isC ? " CALL " : isP ? " PUT " : " "
+                        drawLevel(val, ladCol, "L" + num + sideTxt + str.tostring(val, "#,###"), false, false)

@@ -12,6 +12,9 @@
   --ink:#f2f4f8; --ink-2:#a8adbb; --ink-3:#6b7080;
   --grid:#232733; --baseline:#3a3f4d; --ring:rgba(255,255,255,.08);
   --green:#00ac77; --pink:#bc2071; --gold:#9c6d00;
+  /* secondary walls (opposite side of zero gamma) — same hue family, stepped
+     back so they read as subordinate to the primary walls, not competing */
+  --green-2:#0a7d5a; --pink-2:#8e2a5e;
   --neon-green:#00ffb2; --neon-pink:#ff4fa3; --neon-gold:#ffc933;
   --neutral-line:#dfe3ec; --bad:#e05252; --warnc:#d9a13b;
   color-scheme:dark;
@@ -72,6 +75,8 @@ header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:6px 
 .dot.p{background:var(--pink);box-shadow:0 0 7px rgba(255,79,163,.6)}
 .dot.f{background:var(--gold);box-shadow:0 0 7px rgba(255,201,51,.55)}
 .dot.n{background:var(--neutral-line)}
+.dot.g2{background:var(--green-2);box-shadow:0 0 5px rgba(0,255,178,.28)}
+.dot.p2{background:var(--pink-2);box-shadow:0 0 5px rgba(255,79,163,.28)}
 
 /* ---------- cards / grid ---------- */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -201,7 +206,7 @@ footer b{color:var(--ink-2);font-weight:650}
       </div>
       <div class="chart" id="curve"></div>
       <div class="hd" style="margin:14px 0 8px"><h2>γ-Ladder</h2>
-        <span class="note">top strikes by |net| within ±5% · walls always listed</span></div>
+        <span class="note">the biggest bars within ±5% by total γ · dominant γ = heavier side at that strike</span></div>
       <div id="ladder" style="overflow-x:auto"></div>
     </div>
 
@@ -234,8 +239,34 @@ const MULT = SNAP.mult;                      // null → QQQ-space fallback
 const SPACE = MULT ? SNAP.fx : SNAP.sym;     // label for the price space in use
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const C = {green:css('--green'), pink:css('--pink'), gold:css('--gold'),
+           green2:css('--green-2'), pink2:css('--pink-2'),
            neutral:css('--neutral-line'), ink2:css('--ink-2'), ink3:css('--ink-3'),
            grid:css('--grid'), base:css('--baseline')};
+// Every named wall, in one place — the tiles, histogram annotations, tables and
+// drift chart all read this list, so a wall can never appear on one surface and
+// go missing on another. The two secondary walls are the notable opposite-side
+// concentrations across the zero-gamma level and are often absent.
+const WALLS = [
+  {k:SNAP.call_wall,    col:C.green,  dot:"g",  lab:"CALL WALL",     info:"cw"},
+  {k:SNAP.put_wall,     col:C.pink,   dot:"p",  lab:"PUT WALL",      info:"pw"},
+  {k:SNAP.put_wall_hi,  col:C.pink2,  dot:"p2", lab:"PUT WALL ▲ZG",  info:"pwhi", sec:true},
+  {k:SNAP.call_wall_lo, col:C.green2, dot:"g2", lab:"CALL WALL ▼ZG", info:"cwlo", sec:true},
+].filter(w => w.k != null);
+// Only the walls get named. Ladder levels are picked on prominence (total gamma)
+// and carry no badge of their own — no annotation on the by-strike chart, no tag
+// in the tables, no legend key.
+// filter, not find: spot landing exactly on a strike makes it BOTH walls at once
+// (compute()'s above/below splits are both inclusive), and .find would silently
+// drop the put wall from the histogram and tables while its tile still showed it
+const wallAt  = k => { if (k==null) return null;
+  const m = WALLS.filter(w => w.k === k);
+  if (!m.length) return null;
+  if (m.length === 1) return m[0];
+  return {k, col:m[0].col, dot:m[0].dot, info:m[0].info,
+          sec:m.every(w=>w.sec), lab:m.map(w=>w.lab).join(" + ")}; };
+const isWall  = k => wallAt(k) != null;
+// zero-gamma reference the secondary walls were measured against
+const ZG_LAB  = SNAP.zg_is_flip ? "zero gamma" : "spot (no flip in ±7%)";
 const toPx  = v => MULT ? v*MULT : v;                  // chain price → display space
 const fmtNQ = v => v==null ? "—" : Math.round(v).toLocaleString('en-US');
 const fmtPxV= v => v==null ? "—" : (MULT ? fmtNQ(v*MULT) : (+v.toFixed(1)).toLocaleString('en-US'));
@@ -306,6 +337,12 @@ const niceStep = span => { const raw = span/5, p = Math.pow(10, Math.floor(Math.
   if (ch.source === "fresh")
     chip("", "✓", "chain fresh",
          "Options chain downloaded from Cboe this run (source data is ~15-min delayed).");
+  else if (ch.source === "unchanged")
+    chip("", "✓", "chain current",
+         "Asked Cboe this run and they answered 304 Not Modified — they have published " +
+         "nothing newer, so the cached chain IS the latest chain. The check costs a few " +
+         "hundred bytes instead of 5.5 MB, which is why the collector can poll often " +
+         "without hammering the CDN.");
   else if (ch.source === "cache")
     chip("", "✓", `chain cache ${Math.round(ch.age_min)}m`,
          `Options chain reused from local cache (downloaded ${Math.round(ch.age_min)} min ago). ` +
@@ -320,17 +357,43 @@ const niceStep = span => { const raw = span/5, p = Math.pow(10, Math.floor(Math.
   chip("", "◷", "OI: last OCC settlement",
        "OI updates overnight; intraday runs re-price IV/greeks/spot on frozen OI — blind to today’s new 0DTE positioning.");
   if (SNAP.warn) chip("warn", "⚠", "BS/chain sign disagree", "BS-at-spot sign differs from chain-greek net — treat regime with suspicion.");
+  // Age chip headlines the age of the DATA, not of the run. "computed 0m ago"
+  // is true and useless: it can sit next to a chain pulled 18 min earlier whose
+  // quotes were already ~15 min delayed at Cboe. Report Cboe's own payload
+  // timestamp, add their stated source delay, and warn on the total.
   const age = document.createElement("span"); age.className = "chip"; age.tabIndex = 0;
-  age.dataset.popTitle = "Snapshot age";
-  age.dataset.popBody = "When this snapshot was computed, and how old it is. Turns amber past " +
-              "20 min — the collector isn't feeding (stopped, crashed, or between sessions).";
+  const stampUtc = DATA.meta.chain_stamp_utc, stampEt = DATA.meta.chain_stamp_et;
+  const srcDelay = DATA.meta.source_delay_min || 0;
+  age.dataset.popTitle = stampUtc ? "Market-data age" : "Snapshot age";
   chips.appendChild(age);
-  const gen = new Date(DATA.meta.generated_utc);
-  const tick = () => { const m = Math.max(0, Math.round((Date.now()-gen.getTime())/60000));
-    age.textContent = `updated ${fmtExp(DATA.meta.generated_et.slice(0,10))} · ${etHM(DATA.meta.generated_et)} ET · ${m}m ago`;
-    age.classList.toggle("warn", m > 20);
-    if (m > 20 && !age.dataset.s){ age.dataset.s = "1";
-      age.insertBefore(document.createTextNode("⚠ "), age.firstChild); } };
+  const gen  = new Date(DATA.meta.generated_utc);
+  const base = stampUtc ? new Date(stampUtc) : gen;
+  const tick = () => {
+    const runM  = Math.max(0, Math.round((Date.now()-gen.getTime())/60000));
+    const dataM = Math.max(0, Math.round((Date.now()-base.getTime())/60000)) + srcDelay;
+    let label;
+    if (stampUtc){
+      label = `Cboe data ${etHM(stampEt)} ET · ~${dataM}m old`;
+      age.dataset.popBody =
+        `Cboe stamped this chain ${etHM(stampEt)} ET (${new Date(stampUtc).toISOString().slice(11,19)} UTC). ` +
+        `Their feed is a further ~${srcDelay} min delayed at source, so the gamma map reflects roughly ` +
+        `${dataM} minutes ago. The collector computed this snapshot at ${etHM(DATA.meta.generated_et)} ET ` +
+        `(${runM}m ago) — that clock tells you the collector is alive, not how fresh the map is. ` +
+        `Spot and the NQ multiplier are exempt: the futures quote is fetched live every run and never cached.`;
+    } else {
+      label = `updated ${fmtExp(DATA.meta.generated_et.slice(0,10))} · ${etHM(DATA.meta.generated_et)} ET · ${runM}m ago`;
+      age.dataset.popBody = "When this snapshot was computed, and how old it is. Turns amber past " +
+        "20 min — the collector isn't feeding (stopped, crashed, or between sessions).";
+    }
+    // warn threshold sits above the source delay, so a healthy 5-min poll (data
+    // ~16-21 min old) reads normal and only a genuinely stalled feed goes amber.
+    // The ⚠ is part of the assigned string, not a separately-inserted node: this
+    // reassigns textContent every 30 s, which would wipe an inserted node and —
+    // with a one-shot latch guarding re-insertion — show the warning once and
+    // never again. Rebuilding the whole label also lets it clear itself.
+    const warn = (stampUtc ? dataM > 20 + srcDelay : runM > 20);
+    age.textContent = (warn ? "⚠ " : "") + label;
+    age.classList.toggle("warn", warn); };
   tick(); setInterval(tick, 30000);
 })();
 
@@ -369,6 +432,9 @@ const away = k => { if (k==null) return "";
        away(SNAP.call_wall)+" · strike "+fmtK(SNAP.call_wall), {info:"cw"});
   tile("put wall", "p", fmtPxV(SNAP.put_wall),
        away(SNAP.put_wall)+" · strike "+fmtK(SNAP.put_wall), {info:"pw"});
+  // no tiles for the secondary walls or spikes (owner, 2026-08-03): the tile row
+  // is for the headline numbers, and those levels already read clearly on the
+  // by-strike chart, in both tables and in the Session Read
   tile("net GEX / 1%", SNAP.regime==="NEG"?"p":"g", fmtB(SNAP.net_gex),
        SNAP.regime==="NEG" ? "NEG — hedging tends to amplify moves"
                            : "POS — hedging tends to dampen moves", {small:true, info:"regime"});
@@ -393,6 +459,8 @@ const INFO = {
   flip: ["Gamma flip (naive)", "Price where naive net dealer gamma crosses zero on our re-priced grid. Above it, dealer hedging tends to lean against price (dampening); below it, hedging chases price and moves can extend. A zone of ±~20 NQ pts, never a line."],
   cw:   ["Call wall (naive)", "Strike carrying the heaviest call-side gamma at/above spot. Assumed dealer hedging there tends to lean against rallies — the heaviest opposing flow on the upside map. A zone, not a tick."],
   pw:   ["Put wall (naive)", "Strike carrying the heaviest put-side gamma at/below spot — the downside analog. Assumed dealer hedging pressure there tends to lean against declines. A zone, not a tick."],
+  pwhi: ["Put wall above zero gamma (naive)", "The heaviest put-side gamma strike sitting ABOVE the gamma flip — put structure parked in the positive-gamma half of the map, which is the exception to the usual shape rather than the rule. Listed only when it carries at least a quarter of the primary put wall's gamma and sits clear of every level already drawn, so it is never a relabelling of a line you already have. Same naive dealer assumption, same zone caveat."],
+  cwlo: ["Call wall below zero gamma (naive)", "The heaviest call-side gamma strike sitting BELOW the gamma flip — call structure left behind in the negative-gamma half of the map, typically strikes that were bought lower and are now in the money. Listed under the same rules as its put-side twin: a quarter of the primary call wall's gamma minimum, and clear of the levels already on the chart. Naive, and a zone, not a tick."],
   regime: ["Net GEX / regime", "Total naive dealer gamma per 1% move, assuming dealers are long calls / short puts (textbook, NOT dealer-calibrated). POS: hedging sells strength and buys weakness (dampening). NEG: hedging sells weakness and buys strength (amplifying)."],
   em:   ["Expected move", "Front-expiry ATM implied vol × spot × √T — the options market's ~1σ range to that expiry, translated to NQ points via the live multiplier."],
   iv:   ["ATM implied volatility", "The big number is front-expiry at-the-money IV — the exact input the expected move needs (a 2-day range needs 2-day vol). IV30 is the 30-day interpolation from our same chain: that's the figure comparable to composite IV numbers on sites like Barchart, which blend expiries and the put skew and so read several points higher. Note: Friday-evening marks depress front IV (weekend effect)."],
@@ -455,6 +523,22 @@ const INFO = {
   seg("Heaviest assumed-dealer hedging strikes: calls " + fmtK(SNAP.call_wall) + " (" + fmtPxV(SNAP.call_wall) +
       (SNAP.call_wall!=null ? ", " + away(SNAP.call_wall) : "") + "), puts " + fmtK(SNAP.put_wall) +
       " (" + fmtPxV(SNAP.put_wall) + (SNAP.put_wall!=null ? ", " + away(SNAP.put_wall) : "") + "). ");
+  {                                    // opposite-side structure across zero gamma
+    const bits = [];
+    if (SNAP.put_wall_hi != null)
+      bits.push("puts at " + fmtK(SNAP.put_wall_hi) + " (" + fmtPxV(SNAP.put_wall_hi) + ") above it");
+    if (SNAP.call_wall_lo != null)
+      bits.push("calls at " + fmtK(SNAP.call_wall_lo) + " (" + fmtPxV(SNAP.call_wall_lo) + ") below it");
+    if (bits.length)
+      seg("The map also carries notable opposite-side structure across " + ZG_LAB + ": " +
+          bits.join(", and ") + ". ");
+  }
+  {                                    // the rest of what stands out on the map
+    const rest = (SNAP.ladder || []).filter(k => !isWall(k));
+    if (rest.length)
+      seg("Beyond the walls, gamma also stacks up at " +
+          rest.map(k => fmtK(k) + " (" + fmtPxV(k) + ")").join(", ") + ". ");
+  }
   if (SNAP.em != null)
     seg("Options price a ±" + (MULT ? fmtNQ(SNAP.em*MULT) + " pt" : SNAP.em.toFixed(1)) +
         " (" + (SNAP.em/SNAP.spot*100).toFixed(1) + "%) move into " + fmtExp(SNAP.front_exp) +
@@ -534,9 +618,11 @@ function renderHist(){
   }
   txt(root, xC, H-2, "γ notional, $B per 1% — puts ◄ · ► calls", C.ink3, 10, "middle");
   svg("line", {x1:xC, y1:MT, x2:xC, y2:MT+plotH, stroke:C.base, "stroke-width":1}, root);
-  // wall row highlights
-  rows.forEach((r,i)=>{ if (r.k===SNAP.call_wall || r.k===SNAP.put_wall)
-    svg("rect", {x:ML-2, y:yOf(i), width:plotW+4, height:rowH, fill:css('--surface-2'), rx:3}, root); });
+  // wall row highlights (primaries solid, secondaries at half strength so the
+  // two tiers stay distinguishable at a glance)
+  rows.forEach((r,i)=>{ const w = wallAt(r.k); if (w)
+    svg("rect", {x:ML-2, y:yOf(i), width:plotW+4, height:rowH, fill:css('--surface-2'),
+                 opacity: w.sec ? .55 : 1, rx:3}, root); });
   // bars
   const layer = svg("g", {}, root);
   rows.forEach((r,i)=>{
@@ -549,7 +635,7 @@ function renderHist(){
   // y labels: at most ~14 ticks; wall labels win over colliding step labels
   const lstep = Math.max(1, Math.ceil(n/14));
   const wallIdx = new Set();
-  rows.forEach((r,i)=>{ if (r.k===SNAP.call_wall || r.k===SNAP.put_wall) wallIdx.add(i); });
+  rows.forEach((r,i)=>{ if (isWall(r.k)) wallIdx.add(i); });
   const nearWall = i => !wallIdx.has(i) && rowH < 12 &&
     [...wallIdx].some(w => Math.abs(w-i) === 1);
   rows.forEach((r,i)=>{
@@ -559,18 +645,19 @@ function renderHist(){
       if (MULT) txt(root, 4, y, fmtK(r.k), C.ink3, 9.5, "start");
     }
   });
-  // wall annotations — nudged apart when the walls land on adjacent strikes
-  let cwY = null, pwY = null;
-  rows.forEach((r,i)=>{ const y = yOf(i)+rowH/2+3.5;
-    if (r.k===SNAP.call_wall) cwY = y;
-    if (r.k===SNAP.put_wall)  pwY = y; });
-  if (cwY!=null && pwY!=null && Math.abs(pwY-cwY) < 12){ cwY -= 6; pwY += 6; }
-  const wallNote = (y, col, label) => {
-    svg("circle", {cx:W-MR+10, cy:y-3.5, r:3.5, fill:col, stroke:css('--surface'), "stroke-width":2}, root);
-    txt(root, W-MR+18, y, label, C.ink2, 10, "start", 650);
-  };
-  if (cwY!=null) wallNote(cwY, C.green, "CALL WALL");
-  if (pwY!=null) wallNote(pwY, C.pink, "PUT WALL");
+  // wall annotations — up to four now, so the pairwise nudge is replaced by a
+  // sorted sweep that pushes each label clear of the one above it
+  const notes = [];
+  rows.forEach((r,i)=>{ const w = wallAt(r.k);
+    if (w) notes.push({y:yOf(i)+rowH/2+3.5, col:w.col, lab:w.lab, sec:w.sec}); });
+  notes.sort((a,b)=>a.y-b.y);
+  for (let i = 1; i < notes.length; i++)
+    if (notes[i].y - notes[i-1].y < 12) notes[i].y = notes[i-1].y + 12;
+  for (const nt of notes){
+    svg("circle", {cx:W-MR+10, cy:nt.y-3.5, r:nt.sec?2.8:3.5, fill:nt.col,
+                   stroke:css('--surface'), "stroke-width":2}, root);
+    txt(root, W-MR+18, nt.y, nt.lab, nt.sec?C.ink3:C.ink2, nt.sec?9:10, "start", nt.sec?500:650);
+  }
   // spot + flip hairlines — interpolate between the bracketing rows' centers
   // (rows are index-positioned; strike spacing can be uneven, so a plain
   // price-proportional mapping would drift off the rows it sits between)
@@ -701,20 +788,30 @@ function renderCurve(){
 function renderDrift(){
   const host = $("#drift"); host.replaceChildren();
   const leg = $("#driftLegend"); leg.replaceChildren();
+  // window first: the legend gate below must test the SAME rows the chart plots,
+  // or a series whose only values fall outside the window earns a legend key and
+  // then draws nothing (session_history returns every row for the ET date)
+  const tminOf = t => { const m = /T(\d\d):(\d\d)/.exec(t); return m ? +m[1]*60 + +m[2] : 0; };
+  const WIN0 = 7*60, WIN1 = 16*60;            // tracks collector RTH_OPEN/CLOSE
+  const HISTW = HIST.filter(h => { const m = tminOf(h.t); return m >= WIN0 && m <= WIN1; });
+  // Drift tracks the four levels worth watching move: spot, flip and the two
+  // primary walls. The secondary walls are deliberately NOT plotted (owner,
+  // 2026-08-03) — they come and go as the flip drifts, so their series is a
+  // dashed stutter that reads as repositioning rather than showing it.
+  // `opt`/`dash` are retained: any future optional series MUST gate on HISTW
+  // (not HIST) and label from the latest snapshot, or it earns a legend key
+  // with no line and a rail label for a level that no longer exists.
   const series = [
     {key:"spot", lab:"Spot",      col:C.neutral, get:h=>h.mult ? h.fut       : null},
     {key:"flip", lab:"Flip",      col:"#c9962e", get:h=>h.mult && h.flip!=null ? h.flip*h.mult : null},
     {key:"cw",   lab:"Call Wall", col:C.green,   get:h=>(h.mult && h.cw!=null) ? h.cw*h.mult : null},
     {key:"pw",   lab:"Put Wall",  col:C.pink,    get:h=>(h.mult && h.pw!=null) ? h.pw*h.mult : null},
-  ];
+  ].filter(s => !s.opt || HISTW.some(h => s.get(h) != null));
   for (const s of series){ const k = document.createElement("span"); k.className = "key";
     const sw = document.createElement("span"); sw.className = "swl"; sw.style.borderTopColor = s.col;
     k.appendChild(sw); k.appendChild(document.createTextNode(s.lab.toUpperCase())); leg.appendChild(k); }
-  const tminOf = t => { const m = /T(\d\d):(\d\d)/.exec(t); return m ? +m[1]*60 + +m[2] : 0; };
-  const WIN0 = 8*60+30, WIN1 = 16*60;         // graph shows 08:30–16:00 ET only
-  const HISTW = HIST.filter(h => { const m = tminOf(h.t); return m >= WIN0 && m <= WIN1; });
   if (!HISTW.length){ host.innerHTML =
-    '<div class="empty">no snapshots in the 08:30–16:00 ET window yet</div>'; return; }
+    '<div class="empty">no snapshots in the 07:00–16:00 ET window yet</div>'; return; }
   const anyNQ = HISTW.some(h=>h.mult);
   if (!anyNQ){ host.innerHTML =
     '<div class="empty">no futures quote yet today — NQ drift needs the multiplier; see snapshots table</div>'; return; }
@@ -760,16 +857,25 @@ function renderDrift(){
     for (const p of pts){ if (p) cur.push(p); else { if (cur.length) runs.push(cur); cur = []; } }
     if (cur.length) runs.push(cur);
     for (const run of runs){
-      if (run.length > 1)
-        svg("path", {d:"M"+run.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" L"),
-          fill:"none", stroke:s.col, "stroke-width":2, "stroke-linejoin":"round",
-          "stroke-linecap":"round"}, root);
+      if (run.length > 1){
+        const a = {d:"M"+run.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" L"),
+          fill:"none", stroke:s.col, "stroke-width":s.dash?1.5:2,
+          "stroke-linejoin":"round", "stroke-linecap":"round"};
+        if (s.dash) a["stroke-dasharray"] = s.dash;
+        svg("path", a, root);
+      }
       if (single || run.length === 1)
-        svg("circle", {cx:run[run.length-1][0], cy:run[run.length-1][1], r:4,
+        svg("circle", {cx:run[run.length-1][0], cy:run[run.length-1][1], r:s.dash?3:4,
           fill:s.col, stroke:css('--surface'), "stroke-width":2}, root);
     }
-    const lastPt = [...pts].reverse().find(p=>p);
-    if (lastPt) ends.push({y:lastPt[1], col:s.col, lab:s.lab.toUpperCase(), v:lastPt[2]});
+    // The rail is a CURRENT-level readout, so an optional series must label what
+    // the latest snapshot holds — not the last value that ever existed. A
+    // secondary wall the flip has drifted past has to leave the rail with it,
+    // or the chart names a level this run did not compute. The primaries keep
+    // last-known so a one-off quote failure doesn't blank them.
+    const lastPt = s.opt ? pts[pts.length-1] : [...pts].reverse().find(p=>p);
+    if (lastPt) ends.push({y:lastPt[1], col:s.col,
+      lab:(s.slab || s.lab.toUpperCase()), v:lastPt[2]});
   }
   if (emPts.length){          // EM edge labels join the collision pass (muted, no key)
     const last = emPts[emPts.length-1];
@@ -872,7 +978,7 @@ function renderDrift(){
   const histDate = DATA.history_date, curDate = DATA.meta.generated_et.slice(0, 10);
   if (histDate && histDate !== curDate)
     note.textContent = "showing the " + fmtExp(histDate) +
-                       " session — the next session picks up from 08:30 ET";
+                       " session — the next session picks up from 07:00 ET";
   else if (single)
     note.textContent = "first snapshot of the session — drift builds as the collector loops";
 }
@@ -922,29 +1028,38 @@ function paginate(host, cols, rows, hlFn, pageSize){
 }
 (function tables(){
   const per = {}; SNAP.strikes.forEach(r=>per[r.k]=r);
-  const tagOf = k => k===SNAP.call_wall ? {tag:"CALL WALL", dot:"g"}
-                   : k===SNAP.put_wall  ? {tag:"PUT WALL",  dot:"p"} : "";
-  // ladder display: engine's top-|net| strikes PLUS the walls, always — a wall
+  const tagOf = k => { const w = wallAt(k); return w ? {tag:w.lab, dot:w.dot} : ""; };
+  // Which side's gamma dominates the strike — the same C/P tag the TradingView
+  // string and levels.txt carry, so a ladder level is never an anonymous price.
+  // Deliberately headed "dominant γ", not "side": it answers a different
+  // question from the wall tag beside it. A strike can be put-dominant overall
+  // and still be the heaviest CALL-side strike below zero gamma (ITM calls
+  // under a thicker put book) — both readings are true and must not collide.
+  const sideOf = r => r.side === "C" ? {tag:"call", dot:"g2"} : {tag:"put", dot:"p2"};
+  const COLS = ["strike", SNAP.fx+"≈", "call γ", "put γ", "net", "dominant γ", ""];
+  // ladder display: engine's top-|net| strikes PLUS every named wall — a wall
   // whose call/put γ nearly cancel can rank below the top-6 by |net| (the
   // computation stays frozen; this is presentation only)
-  const ladKs = [...new Set([...SNAP.ladder, SNAP.call_wall, SNAP.put_wall]
+  const ladKs = [...new Set([...SNAP.ladder, ...WALLS.map(w=>w.k)]
                 .filter(k => k != null && per[k]))].sort((a,b)=>b-a);
   const ladRows = ladKs.map(k=>{ const r = per[k]; return {
-    k, cells:[fmtK(k), MULT?fmtNQ(k*MULT):"—", fmtB(r.call), fmtB(-r.put), fmtB(r.net), tagOf(k)]};});
-  makeTable($("#ladder"), ["strike", SNAP.fx+"≈", "call γ", "put γ", "net", ""],
-            ladRows, r=>r.k===SNAP.call_wall||r.k===SNAP.put_wall);
+    k, cells:[fmtK(k), MULT?fmtNQ(k*MULT):"—", fmtB(r.call), fmtB(-r.put), fmtB(r.net),
+              sideOf(r), tagOf(k)]};});
+  makeTable($("#ladder"), COLS, ladRows, r=>isWall(r.k));
   const allRows = SNAP.strikes.slice().sort((a,b)=>b.k-a.k).map(r=>({k:r.k, cells:[
-    fmtK(r.k), MULT?fmtNQ(r.k*MULT):"—", fmtB(r.call), fmtB(-r.put), fmtB(r.net), tagOf(r.k)]}));
-  paginate($("#strikesTable"), ["strike", SNAP.fx+"≈", "call γ", "put γ", "net", ""],
-           allRows, r=>r.k===SNAP.call_wall||r.k===SNAP.put_wall);
+    fmtK(r.k), MULT?fmtNQ(r.k*MULT):"—", fmtB(r.call), fmtB(-r.put), fmtB(r.net),
+    sideOf(r), tagOf(r.k)]}));
+  paginate($("#strikesTable"), COLS, allRows, r=>isWall(r.k));
+  // Mirrors the drift chart: spot, flip and the two primary walls only. The
+  // secondary walls are archived in SQLite but not tabulated here (owner,
+  // 2026-08-03) — they blink in and out as the flip drifts, which fills the
+  // column with dashes and reads as missing data rather than as absence.
+  const px = (h,v) => v==null ? "—" : (h.mult ? fmtNQ(v*h.mult) : fmtK(v));
   const snapRows = HIST.slice().reverse().map(h=>({cells:[
     etHM(h.t)+" ET",
     h.mult ? fmtNQ(h.fut) : fmtK(h.spot)+" ("+SNAP.sym+")",
-    h.flip==null ? "none" : (h.mult ? fmtNQ(h.flip*h.mult) : fmtK(h.flip)),
-    h.mult ? fmtNQ(h.cw*h.mult) : fmtK(h.cw),
-    h.mult ? fmtNQ(h.pw*h.mult) : fmtK(h.pw),
-    (h.em!=null && h.mult) ? "±"+fmtNQ(h.em*h.mult) : "—",
-    fmtB(h.net), h.regime]}));
+    h.flip==null ? "none" : px(h, h.flip), px(h, h.cw), px(h, h.pw),
+    (h.em!=null && h.mult) ? "±"+fmtNQ(h.em*h.mult) : "—", fmtB(h.net), h.regime]}));
   paginate($("#snapsTable"),
     ["time ↓", "spot", "flip", "call wall", "put wall", "EM", "net γ/1%", "regime"], snapRows);
 })();
@@ -958,6 +1073,8 @@ function paginate(host, cols, rows, hlFn, pageSize){
   const parts = [
     "GEXYGEN maps dealer gamma from published open interest using the industry-standard convention (dealers long calls, short puts).",
     "Translated levels are <b>zones, not ticks</b> — one QQQ strike spans ≈41–42 NQ pts, so read each level as ±~20 pts.",
+    "<b>▲ZG / ▼ZG</b> mark the notable opposite-side walls — put gamma above the zero-gamma level, call gamma below it. They are listed only when they carry ≥25% of their own side's primary wall and sit clear of every level already drawn.",
+    "Ladder levels are the strikes that actually stand out: ranked by <b>total</b> gamma (calls + puts), each one a local peak carrying at least 20% of the band's biggest bar and set at least one strike clear of every level already drawn. Ranking on <i>net</i> gamma instead would surface small one-sided strikes and cluster them together.",
     "The map is <b>context beneath order flow, not trade signals</b>.",
     `Per-expiry net γ: ${subs || "—"}.`,
     `DEX ${fmtB(SNAP.dex)} (natural-sign Δ notional) — positioning tilt only.`,
