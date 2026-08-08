@@ -1,18 +1,7 @@
-# runtime data & generated outputs (the collector recreates all of these)
-nqgex.db
-cache/
-dashboard.html
-levels.json
-levels.txt
-tv_levels.txt
-runs.log
-runs_console.log
+# Whitelist repo: ignore everything, then re-include only what should be public.
+# The app source, runtime data and generated outputs all stay local.
+/*
 
-# python
-__pycache__/
-*.pyc
-
-# local editor/agent settings
-
-# secrets (none currently — keep the pattern so keys can never be committed)
-*.key
+!/.gitignore
+!/README.md
+!/screenshots/

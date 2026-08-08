@@ -1,20 +1,20 @@
-# GEXYGEN
+# NQGEX
 
 **Self-hosted gamma exposure (GEX) levels for NQ / MNQ futures — computed from free public data, on your own machine, for $0/month.**
 
 > **Status:** currently built for **local use** — the collector and dashboard run on your own PC. Hosting it as an accessible web app is on the roadmap; the architecture (a stateless viewer over a single data payload) was designed with that migration in mind.
 
-![GEXYGEN dashboard](screenshots/dashboard-overview.png)
+![NQGEX dashboard](screenshots/dashboard-overview.png)
 
 ## What it is
 
-GEXYGEN is a personal, self-hosted alternative to commercial options-positioning dashboards (SpotGamma, MenthorQ, GEX Radar) for the slice of their value that can be computed from **published open interest and delayed quotes**: dealer gamma exposure levels, translated into NQ futures points.
+NQGEX is a personal, self-hosted alternative to commercial options-positioning dashboards (SpotGamma, MenthorQ, GEX Radar) for the slice of their value that can be computed from **published open interest and delayed quotes**: dealer gamma exposure levels, translated into NQ futures points.
 
 Every 5 minutes during the US session it ingests the full QQQ options chain from Cboe's delayed public feed and a live NQ futures quote, runs a gamma exposure model over ~12,000 contracts, and produces:
 
 | Output | What it tells you |
 |---|---|
-| **Net GEX & regime** | Total naive dealer gamma per 1% move. Positive → hedging flows tend to dampen moves; negative → hedging flows tend to amplify them |
+| **Net GEX & regime** | Total dealer gamma per 1% move. Positive → hedging flows tend to dampen moves; negative → hedging flows tend to amplify them |
 | **Gamma flip** | The price where the net gamma of the map changes sign, found by re-pricing the whole book across a ±7% grid |
 | **Call wall / Put wall** | The strikes carrying the heaviest call-side / put-side gamma — where opposing hedge flow is thickest |
 | **Secondary walls (▲ZG / ▼ZG)** | The notable *opposite-side* concentrations across the zero-gamma level: put gamma sitting above the flip, call gamma sitting below it. Listed only when they carry ≥25% of their own side's primary wall and sit clear of every level already on the chart |
@@ -70,7 +70,7 @@ Install: copy `GexLevels.cs` into `Documents\NinjaTrader 8\bin\Custom\Indicators
 
 ### TradingView — paste string
 
-Pine Script is sandboxed (no network or file access), so GEXYGEN uses the same delivery mechanism the commercial vendors use on TradingView: a **paste string**. The collector writes a one-line levels string to `tv_levels.txt` and displays it on the dashboard with a copy button; the included **GEX Levels** indicator (`gexygen_levels.pine`) parses it and draws the levels with zone shading, configurable styling, and per-level colors.
+Pine Script is sandboxed (no network or file access), so NQGEX uses the same delivery mechanism the commercial vendors use on TradingView: a **paste string**. The collector writes a one-line levels string to `tv_levels.txt` and displays it on the dashboard with a copy button; the included **GEX Levels** indicator (`gexygen_levels.pine`) parses it and draws the levels with zone shading, configurable styling, and per-level colors.
 
 ```
 FLIP=28478;CW=28882;PW=28057;PWA=29088;EMH=28565;EML=28329;L1P=27851;L5C=28676
@@ -111,10 +111,10 @@ The session window is gated in **ET via zoneinfo** (premarket from 07:00, captur
 
 ## Honesty & limitations (by design)
 
-- The model is **naive**: it assumes the textbook dealer position (long calls / short puts) — the same assumption every free GEX source runs on. It is **not** dealer-calibrated positioning
+- The model assumes the **textbook dealer position** (long calls / short puts) — the same assumption every free GEX source runs on. It is **not** dealer-calibrated positioning
 - Translated levels are **zones (±~20 NQ pts), never ticks** — one QQQ strike spans ~41 NQ points
 - Chain data is ~15 minutes delayed; **open interest is frozen intraday** (it updates overnight via OCC settlement), so the map cannot see positioning built today
-- GEXYGEN provides **levels and context, not trade signals** — it is designed as a context layer beneath an order-flow-driven process, and its UI copy is deliberately written to never suggest otherwise
+- NQGEX provides **levels and context, not trade signals** — it is designed as a context layer beneath an order-flow-driven process, and its UI copy is deliberately written to never suggest otherwise
 
 ## Roadmap
 
