@@ -8,7 +8,7 @@
 
 ## Overview
 
-NQGEX ingests a full equity-index options chain on a schedule, computes a dealer gamma exposure model across roughly 12,000 contracts, and publishes the resulting price levels to a browser dashboard and directly onto live trading charts.
+NQGEX ingests a full options chain on a schedule, computes a dealer gamma exposure model across roughly 12,000 contracts, and publishes the resulting price levels to a browser dashboard and directly onto live trading charts.
 
 Each run produces:
 
@@ -23,7 +23,7 @@ Each run produces:
 | **ATM IV / IV30** | Front-expiry volatility and a 30-day interpolated figure for term-structure context |
 | **Positioning** | Open-interest and gamma ratios across the near band |
 
-Levels are computed in options space and translated into futures points through a multiplier derived live on every run rather than hardcoded — it bundles the ETF/index ratio and the futures basis, both of which drift intraday.
+Levels are computed in options space and translated into futures points through a multiplier derived live on every run rather than hardcoded — it bundles every conversion factor between the options underlying and the futures contract, all of which drift intraday.
 
 ## The dashboard
 
@@ -37,7 +37,7 @@ A single self-contained dark-theme page, regenerated on every snapshot and self-
 - **Session Drift** — how the levels, the expected-move band and net gamma have migrated through the session, with a per-snapshot regime strip
 - **Table twins** — every chart has a tabular equivalent for exact figures
 - **Inline explainers** — every metric, chart and status chip carries a plain-English note on what it is and how it was computed
-- **A visible data ledger** — chips showing where this snapshot's inputs came from, their vintage, and how old the underlying data is. Fetch failures surface on the page rather than degrading silently
+- **A visible data ledger** — chips showing the status and vintage of every input, and how old the underlying data is. Fetch failures surface on the page rather than degrading silently
 
 ## Chart integrations
 
@@ -96,10 +96,10 @@ Python (standard library only), SQLite, vanilla JavaScript and hand-built SVG wi
 ## Limitations (stated by design)
 
 - The model assumes the **textbook dealer position** (long calls, short puts). It is **not** dealer-calibrated positioning, and the interface states this everywhere a figure is shown
-- Translated levels are **zones, not ticks** — one option strike spans roughly 41 futures points
+- Translated levels are **zones, not ticks** — a single option strike spans tens of futures points
 - Source data is delayed, and open interest is frozen intraday, so the map cannot see positioning built during the current session
 - It provides **levels and context, not trade signals** — designed as a context layer beneath an order-flow-driven process, with copy written throughout to never imply otherwise
 
 ## Disclaimer
 
-Nothing here is financial advice and no output constitutes a trade signal. Market data is sourced from public delayed endpoints for individual use; redistributing market data commercially requires exchange licensing.
+Nothing here is financial advice and no output constitutes a trade signal. Market data is sourced from third-party providers for individual use; redistributing market data commercially requires exchange licensing.
